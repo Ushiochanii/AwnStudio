@@ -41,7 +41,12 @@ def page_records(page: str, split: str):
     def at(node):
         return graph.nodes[node]
 
-    out = {"junction": [], "gap": [], "root": []}
+    out = {"junction": [], "gap": [], "root": [], "edge": []}
+    for eid, e in graph.edges.items():
+        out["edge"].append({"page": page, "edge": eid, "label": ta.edge_awn.get(eid) is not None, "known": True,
+                            "confidence": e.confidence, "length_mm": edge_len(eid),
+                            "half_width_mm": e.half_width_px * (sx + sy) / 2.0,
+                            "terminal": int(graph.degree(e.u) == 1) + int(graph.degree(e.v) == 1)})
     for j in junctions(graph, cal):
         label = continues(ta, j.a, j.b, far(j.a, j.node), at(j.node), at(j.node), far(j.b, j.node))
         out["junction"].append({**dataclasses.asdict(j), "page": page, "label": label,
@@ -67,7 +72,7 @@ def main():
     args = parser.parse_args()
     out_dir = paths().runs / "linkdata" / args.split
     out_dir.mkdir(parents=True, exist_ok=True)
-    handles = {k: open(out_dir / f"{k}.jsonl", "w") for k in ("junction", "gap", "root")}
+    handles = {k: open(out_dir / f"{k}.jsonl", "w") for k in ("junction", "gap", "root", "edge")}
     for page in pages(args.split):
         t = time.perf_counter()
         recs = page_records(page, args.split)

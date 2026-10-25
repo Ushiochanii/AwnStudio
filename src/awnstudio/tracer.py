@@ -29,7 +29,6 @@ import numpy as np
 from .awngraph import AwnGraph
 from .calibration import Calibration
 from .events import gaps, junctions, roots
-from .geometry import end_direction
 from .linking import LogisticModel
 
 MIN_TRACE_PROB = 1e-3  # traces below this probability are not expanded (negligible mass)
@@ -44,23 +43,16 @@ class Trace:
     jumps: int = 0
 
 
-def _odds(q: float) -> float:
-    q = min(max(q, 1e-6), 1 - 1e-6)
-    return q / (1 - q)
-
-
 class Tracer:
     def __init__(self, graph: AwnGraph, spikelet_geoms: list, cal: Calibration, models: dict[str, LogisticModel]):
         self.g, self.cal, self.models = graph, cal, models
         self.spikelet_geoms = spikelet_geoms
-        self.options: dict[tuple[int, int], list[tuple[str, int, int, float]]] = defaultdict(list)
-        # options[(edge, arrival node)] -> [(kind, next edge, next start node, q)]
+        # options[(edge, arrival node)] -> (junction records, gap records)
+        self.options: dict[tuple[int, int], tuple[list, list]] = defaultdict(lambda: ([], []))
         for j in junctions(graph, cal):
-            q = models["junction"].prob(j.__dict__)
-            self.options[(j.a, j.node)].append(("junction", j.b, j.node, q))
+            self.options[(j.a, j.node)][0].append(j)
         for gp in gaps(graph, cal):
-            q = models["gap"].prob(gp.__dict__)
-            self.options[(gp.a, gp.i)].append(("gap", gp.b, gp.j, q))
+            self.options[(gp.a, gp.i)][1].append(gp)
         self.edge_len = {e: cal.length_mm(edge.path) for e, edge in graph.edges.items()}
 
     # ------------------------------------------------------------------ roots
@@ -88,14 +80,19 @@ class Tracer:
             last_edge, last_start = t.edges[-1]
             arrival = self.g.other(last_edge, last_start)
             used = {e for e, _ in t.edges}
-            opts = [o for o in self.options.get((last_edge, arrival), []) if o[1] not in used]
-            if len(t.edges) >= MAX_HOPS:
-                opts = []
-            ratios = [_odds(q) for *_, q in opts]
-            z = 1.0 + sum(ratios)
-            done.append(Trace(t.edges, t.prob / z, t.length_mm, t.jumps))
-            for (kind, nxt, nstart, _), r in zip(opts, ratios):
-                p = t.prob * r / z
+            jopts, gopts = self.options.get((last_edge, arrival), ([], []))
+            jopts = [o for o in jopts if o.b not in used]
+            gopts = [o for o in gopts if o.b not in used]
+            if len(t.edges) >= MAX_HOPS or not (jopts or gopts):
+                done.append(t)
+                continue
+            probs = self.models["choice"].probabilities(
+                [o.__dict__ for o in jopts], [o.__dict__ for o in gopts], self.g.degree(arrival) >= 3
+            )
+            done.append(Trace(t.edges, t.prob * float(probs[-1]), t.length_mm, t.jumps))
+            moves = [("junction", o.b, o.node) for o in jopts] + [("gap", o.b, o.j) for o in gopts]
+            for (kind, nxt, nstart), pk in zip(moves, probs[:-1]):
+                p = t.prob * float(pk)
                 if p < MIN_TRACE_PROB:
                     continue
                 extra = self.edge_len[nxt]
@@ -123,11 +120,7 @@ class Tracer:
         for edge, start in trace.edges:
             p = self.g.oriented_path(edge, start)
             parts.append(p if not parts else p[1:] if np.allclose(parts[-1][-1], p[0]) else p)
-        path = np.vstack(parts)
-        # The medial axis ends one half-width short of the mask tip: extend the tip.
-        last_edge, _ = trace.edges[-1]
-        hw = self.g.edges[last_edge].half_width_px
-        d = end_direction(path)
-        if d is not None and hw > 0:
-            path = np.vstack([path, path[-1] + d * hw])
-        return path
+        # Pure medial axis. Its end-point convention differs from the manual protocol by a
+        # systematic amount, which is handled once by protocol calibration
+        # (awnstudio.protocol), not by ad-hoc end extensions.
+        return np.vstack(parts)

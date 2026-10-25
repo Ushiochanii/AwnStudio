@@ -139,6 +139,14 @@ def column_ranges(page_id: str) -> dict[int, tuple[float, float]]:
 SAME_OBJECT_OVERLAP = 0.6  # intersection / smaller area for copies in different crops
 
 
+def _polygonal(geometry):
+    """Keep only the area part of a repaired polygon (drop stray lines / points)."""
+    from shapely.ops import unary_union
+
+    parts = [g for g in getattr(geometry, "geoms", [geometry]) if g.geom_type in ("Polygon", "MultiPolygon")]
+    return unary_union(parts) if parts else geometry
+
+
 @lru_cache(maxsize=256)
 def _truth_instances(page_id: str, split: str) -> tuple[TruthInstance, ...]:
     coco = _coco(split)
@@ -154,7 +162,7 @@ def _truth_instances(page_id: str, split: str) -> tuple[TruthInstance, ...]:
         if isinstance(coords, str):
             coords = json.loads(coords)
         ring = coords[0]
-        polygon = make_valid(Polygon(list(zip(ring[0::2], ring[1::2]))))
+        polygon = _polygonal(make_valid(Polygon(list(zip(ring[0::2], ring[1::2])))))
         polygon = affinity.translate(polygon, xoff=float(crop["crop_xyxy"][0]))
         if not polygon.is_empty and polygon.area > 0:
             inst = TruthInstance(f"{page_id}:{ann['id']}", kinds[ann["category_id"]], polygon)

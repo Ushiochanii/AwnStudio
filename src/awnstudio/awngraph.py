@@ -98,6 +98,7 @@ def build_graph(observations: list[Observation], width: int, height: int) -> Awn
     graph.evidence, graph.distance = mask, distance
     _prune_spurs(graph)
     _attach_support(graph, observations, awn_idx)
+    check_graph(graph)
     return graph
 
 
@@ -157,7 +158,10 @@ def _trace(skel: np.ndarray, distance: np.ndarray) -> AwnGraph:
                 add_edge(u, v, pixels)
             # chains that dead-end without a node cannot happen: an end pixel is a node.
 
-    # Isolated cycles (no node at all) are ignored: they are not awn-shaped.
+    # Isolated cycles (no node at all) are ignored: they are not awn-shaped. Self-loops
+    # (a chain leaving and re-entering the same junction) enclose a mask hole and are
+    # skeleton artifacts, so they are dropped as well.
+    edges = {eid: e for eid, e in edges.items() if e.u != e.v}
     incident: dict[int, list[int]] = {n: [] for n in nodes}
     for e in edges.values():
         incident[e.u].append(e.id)
@@ -180,6 +184,12 @@ def _merge_degree_two(graph: AwnGraph, node: int) -> None:
     pb = graph.oriented_path(b, node)  # starts at node
     ea, eb = graph.edges[a], graph.edges[b]
     u, v = graph.other(a, node), graph.other(b, node)
+    if u == v:  # the two edges form a loop through `node`: a hole artifact, drop it
+        _remove_edge(graph, a)
+        _remove_edge(graph, b)
+        graph.nodes.pop(node)
+        graph.incident.pop(node)
+        return
     path = np.vstack([pa, pb[1:]])
     la, lb = ea.length_px, eb.length_px
     hw = (ea.half_width_px * la + eb.half_width_px * lb) / max(1e-9, la + lb)
@@ -240,3 +250,14 @@ def _attach_support(graph: AwnGraph, observations: list[Observation], awn_idx: l
         support = frozenset(awn_idx[j] for j, c in counts.items() if c * 2 >= k)
         e.support = support
         e.confidence = max((observations[i].confidence for i in support), default=0.0)
+
+
+def check_graph(graph: AwnGraph) -> None:
+    """Raise if edges and incidence lists disagree (internal consistency)."""
+    for e in graph.edges.values():
+        assert e.u in graph.nodes and e.v in graph.nodes and e.u != e.v, e.id
+        assert e.id in graph.incident[e.u] and e.id in graph.incident[e.v], e.id
+    for n, inc in graph.incident.items():
+        assert n in graph.nodes
+        for eid in inc:
+            assert eid in graph.edges and n in (graph.edges[eid].u, graph.edges[eid].v)

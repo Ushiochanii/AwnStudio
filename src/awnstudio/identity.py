@@ -26,6 +26,26 @@ class SpikeletIdentity:
     role: str
 
 
+def full_row_identities(page_id: str, split: str) -> list[SpikeletIdentity]:
+    """Identities on pages without cell truth: only rows holding all 15 spikelets.
+
+    A full row is unambiguous: five consecutive triples, each bottom/middle/top.
+    """
+    height = _page_height(page_id)
+    rows: dict[int, list[TruthInstance]] = {1: [], 2: [], 3: []}
+    for inst in truth_instances(page_id, split):
+        if inst.kind == "spikelet":
+            rows[repeat_of(inst.geometry.centroid.y, height)].append(inst)
+    out = []
+    for repeat, members in rows.items():
+        if len(members) != 15:
+            continue
+        members.sort(key=lambda inst: inst.geometry.centroid.x)
+        for k, inst in enumerate(members):
+            out.append(SpikeletIdentity(inst, k // 3 + 1, repeat, ROLES[k % 3]))
+    return out
+
+
 def truth_spikelet_identities(page_id: str, split: str = "valid") -> tuple[list[SpikeletIdentity], list[str]]:
     """Return identities and a list of rows whose counts disagree with cell truth."""
     height = _page_height(page_id)

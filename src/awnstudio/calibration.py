@@ -62,17 +62,17 @@ class Calibration:
         return cls(period, period)
 
 
-def calibrate_cached(page_id: str) -> Calibration:
+def calibrate_cached(page_id: str, method: str = "lattice") -> Calibration:
     """Calibrate a dataset page once and memoize it under runs/calibration/."""
     import json
 
     from .paths import paths
 
-    target = paths().runs / "calibration" / f"{page_id}.json"
+    target = paths().runs / f"calibration_{method}" / f"{page_id}.json"
     if target.exists():
         d = json.loads(target.read_text())
         return Calibration(d["x"], d["y"], d["adequate"], tuple(d["qc_reasons"]))
-    calibration = calibrate_page(cv2.imread(str(paths().page_image(page_id))))
+    calibration = calibrate_page(cv2.imread(str(paths().page_image(page_id))), method)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps({
         "x": calibration.x_period_px, "y": calibration.y_period_px,
@@ -108,11 +108,32 @@ def _period(peaks: np.ndarray) -> float:
     return period
 
 
-def _axis(score: np.ndarray, axis: str) -> tuple[float, int, float]:
+def _lattice_period(peaks: np.ndarray, period: float) -> float:
+    """Sub-pixel period: least-squares fit of line positions to integer lattice indices.
+
+    Peaks are integer pixel positions, so the median gap is quantized to whole (or
+    half) pixels and jumps between pages (57-62 px for a true ~59.1 px). Indexing each
+    detected line by its lattice number (allowing skipped lines) and regressing
+    position on index uses all lines at once; lines whose residual exceeds 3 robust
+    standard deviations (spurious peaks) are dropped once and the fit is repeated.
+    """
+    k = np.concatenate([[0], np.cumsum(np.maximum(1, np.rint(np.diff(peaks) / period)))])
+    slope, offset = np.polyfit(k, peaks, 1)
+    residual = peaks - (slope * k + offset)
+    mad = 1.4826 * np.median(np.abs(residual - np.median(residual)))
+    keep = np.abs(residual) <= 3 * max(mad, 0.5)
+    if keep.sum() >= 3 and not keep.all():
+        slope, _ = np.polyfit(k[keep], peaks[keep], 1)
+    return float(slope)
+
+
+def _axis(score: np.ndarray, axis: str, method: str = "lattice") -> tuple[float, int, float]:
     """Return (period, peak count, strip-to-strip period range) for one axis."""
     reduce_axis = 0 if axis == "x" else 1
     peaks = _peaks(score.mean(axis=reduce_axis))
     period = _period(peaks)
+    if method == "lattice":
+        period = _lattice_period(peaks, period)
     extent = score.shape[0] if axis == "x" else score.shape[1]
     strips = []
     for index in range(QC_STRIPS):
@@ -122,7 +143,8 @@ def _axis(score: np.ndarray, axis: str) -> tuple[float, int, float]:
     return period, len(peaks), float(np.ptp(strips))
 
 
-def calibrate_page(image_bgr: np.ndarray) -> Calibration:
+def calibrate_page(image_bgr: np.ndarray, method: str = "lattice") -> Calibration:
+    """method: "lattice" (sub-pixel, default) or "median" (frozen research behaviour)."""
     if image_bgr is None or image_bgr.ndim != 3:
         raise ValueError("expected a BGR full-page image")
     height, width = image_bgr.shape[:2]
@@ -134,8 +156,8 @@ def calibrate_page(image_bgr: np.ndarray) -> Calibration:
         normalized = cv2.resize(image_bgr, REFERENCE_SIZE, interpolation=interpolation)
 
     score = grid_response(normalized)
-    x_norm, x_peaks, x_range = _axis(score, "x")
-    y_norm, y_peaks, y_range = _axis(score, "y")
+    x_norm, x_peaks, x_range = _axis(score, "x", method)
+    y_norm, y_peaks, y_range = _axis(score, "y", method)
 
     lo, hi = REFERENCE_PERIOD_RANGE
     disagreement = abs(x_norm - y_norm) / max(1e-9, (x_norm + y_norm) / 2.0)

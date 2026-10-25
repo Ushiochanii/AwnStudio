@@ -28,7 +28,7 @@ def check_calibration(pages):
     worst = 0.0
     for page in pages:
         image = cv2.imread(str(paths().page_image(page)))
-        new = calibrate_page(image)
+        new = calibrate_page(image, method="median")
         x_old, y_old, qc, _ = calibrate_grid_v2(image)
         dx = abs(new.x_period_px - x_old["period_px"])
         dy = abs(new.y_period_px - y_old["period_px"])
