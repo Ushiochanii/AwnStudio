@@ -7,10 +7,9 @@ from __future__ import annotations
 import argparse
 import json
 
-import cv2
 
 from awnstudio.cache import load_observations
-from awnstudio.calibration import calibrate_page
+from awnstudio.calibration import calibrate_cached
 from awnstudio.evaluate import format_summary, score_page, summarize
 from awnstudio.paths import paths
 from awnstudio.results import PageResult
@@ -19,7 +18,7 @@ from awnstudio.splits import VALIDATION_PAGES
 
 def run_method(method: str, page: str) -> PageResult:
     observations, meta = load_observations(paths().runs / "detections" / f"{page}.json.gz")
-    calibration = calibrate_page(cv2.imread(str(paths().page_image(page))))
+    calibration = calibrate_cached(page)
     if method == "legacy":
         from awnstudio.baselines.legacy import run_legacy_page
 

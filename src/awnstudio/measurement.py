@@ -23,5 +23,32 @@ def simplify_path(path, tolerance_px: float = DP_TOLERANCE_PX):
     return [points[0], *simplified[1:-1], points[-1]]
 
 
+def trim_root(path, spikelet_geometry):
+    """Start the measurement where the awn leaves its spikelet.
+
+    The awn base is defined as the exit of the path from the spikelet polygon: the
+    initial run of path points inside the polygon is removed and replaced by the
+    boundary crossing point. Paths that start outside are returned unchanged.
+    """
+    from shapely.geometry import LineString, Point
+
+    points = [tuple(map(float, p)) for p in path]
+    k = 0
+    while k < len(points) and spikelet_geometry.contains(Point(points[k])):
+        k += 1
+    if k == 0 or k >= len(points):
+        return points
+    segment = LineString([points[k - 1], points[k]])
+    crossing = segment.intersection(spikelet_geometry.boundary)
+    if crossing.is_empty:
+        return points[k:]
+    candidates = [crossing] if crossing.geom_type == "Point" else list(getattr(crossing, "geoms", []))
+    candidates = [c for c in candidates if c.geom_type == "Point"]
+    if not candidates:
+        return points[k:]
+    exit_point = max(candidates, key=lambda c: segment.project(c))
+    return [(exit_point.x, exit_point.y), *points[k:]]
+
+
 def measure_path_mm(path, calibration: Calibration) -> float:
     return calibration.length_mm(simplify_path(path))
