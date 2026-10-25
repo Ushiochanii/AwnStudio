@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+node_modules/
+*.log
+# runtime outputs and local data never go into git
+runs/
+*.pt
+*.onnx
+configs/paths.local.yaml

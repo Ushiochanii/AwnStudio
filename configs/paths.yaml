@@ -1,0 +1,18 @@
+# Read-only references into the original research project.
+# Paths are WSL paths; override locally with configs/paths.local.yaml (git-ignored).
+legacy_root: /mnt/e/Awn_recognization/wheat-awn-phenotyping
+
+raw_pages: ${legacy_root}/data/raw/primary
+weights: ${legacy_root}/artifacts/models/controlled_v2_targeted_robust_stage1_640_b20/weights/best.pt
+
+annotations: ${legacy_root}/data/annotations/segmentation_source
+split_manifest: ${legacy_root}/data/annotations/segmentation_source/split_manifest.json
+crop_manifest: ${legacy_root}/data/interim/annotation_crops/manifest.jsonl
+page_annotations: ${legacy_root}/data/interim/page_annotations.json
+
+length_truth: ${legacy_root}/data/ground_truth/phenotype/PhenotypingResults.xlsx
+validation_cell_truth: ${legacy_root}/data/ground_truth/phenotype/validation_semantic_truth.json
+accession_mapping: ${legacy_root}/data/interim/accession_mapping.json
+
+# All outputs of this repository go here (git-ignored).
+runs: /mnt/e/Awn_recognization/awn-studio/runs
