@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AwnStudio</title>
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+<script type="module" src="js/app.mjs"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><img src="assets/icon.svg" alt="" width="22" height="22"><span>AwnStudio</span></div>
+  <ol class="steps" id="steps" aria-label="Workflow">
+    <li data-step="import" data-i18n="step.import">Import</li>
+    <li data-step="calibrate" data-i18n="step.calibrate">Calibrate</li>
+    <li data-step="measure" data-i18n="step.measure">Measure</li>
+    <li data-step="review" data-i18n="step.review">Review</li>
+    <li data-step="export" data-i18n="step.export">Export</li>
+  </ol>
+  <div class="topbar-actions">
+    <span class="service" id="service-status" data-state="unknown"><i></i><span id="service-label"></span>
+      <button class="link" id="service-retry" data-i18n="service.retry" hidden>Reconnect</button></span>
+    <span class="save-state" id="save-state"></span>
+    <button id="open-project" data-i18n="action.openProject">Open project</button>
+    <button id="save-project" data-i18n="action.saveProject">Save project</button>
+    <button class="primary" id="export-open" data-i18n="action.export">Export</button>
+    <button class="icon" id="settings-open" data-i18n-title="settings.title" title="Settings" aria-label="Settings">⚙</button>
+  </div>
+</header>
+
+<main class="workspace" id="workspace">
+  <aside class="sidebar" id="sidebar">
+    <div class="pane-head">
+      <h2><span data-i18n="images.title">Images</span> <small id="image-count">0</small></h2>
+      <button class="primary small" id="import-open" data-i18n="action.import">Import</button>
+    </div>
+    <div class="batch">
+      <button id="measure-pending" data-i18n="batch.run">Measure all pending</button>
+      <button id="batch-stop" data-i18n="batch.stop" hidden>Stop after current</button>
+      <div class="batch-progress" id="batch-progress" hidden></div>
+    </div>
+    <div class="list-tools">
+      <label><input type="checkbox" id="select-all-images"> <span data-i18n="images.selectAll">Select all</span></label>
+      <button class="link danger" id="delete-images" data-i18n="images.deleteSelected" disabled>Delete selected</button>
+    </div>
+    <ul class="image-list" id="image-list"></ul>
+    <button class="link sample" id="samples-open" data-i18n="samples.open">Open sample pages…</button>
+  </aside>
+  <div class="resizer" data-resize="sidebar"></div>
+
+  <section class="stage">
+    <div class="stage-head">
+      <div class="page-title">
+        <h1 id="page-name">—</h1>
+        <span id="page-meta" class="muted"></span>
+      </div>
+      <div class="page-actions">
+        <span class="calibration-chip" id="calibration-chip"></span>
+        <button id="calibrate-open" data-i18n="action.calibrate">Calibrate</button>
+        <button class="primary" id="measure-run" data-i18n="action.measure">Measure</button>
+      </div>
+    </div>
+    <div class="job-strip" id="job-strip" hidden>
+      <div class="bar"><i id="job-bar"></i></div><span id="job-text"></span>
+    </div>
+    <div class="notice" id="stale-notice" hidden data-i18n="notice.stale">Calibration changed after measurement. Lengths use the new scale; measure again to rerun reconstruction with it.</div>
+
+    <div class="canvas-wrap" id="canvas-wrap" tabindex="0">
+      <canvas id="canvas"></canvas>
+      <div class="empty" id="empty">
+        <img src="assets/empty.svg" alt="" width="140" height="100">
+        <p data-i18n="empty.title">Drop page images here, or import them.</p>
+        <button class="primary" id="empty-import" data-i18n="action.import">Import</button>
+      </div>
+      <div class="toolbar" id="toolbar" role="toolbar">
+        <button data-tool="select" data-i18n-title="tool.select" title="Select (V)">⬚</button>
+        <button data-tool="spikelet" data-i18n-title="tool.spikelet" title="Add spikelet (N)">⬠</button>
+        <button data-tool="awn" data-i18n-title="tool.awn" title="Redraw awn (A)">〰</button>
+        <button data-tool="ruler" data-i18n-title="tool.ruler" title="Two-point calibration (R)">📏</button>
+        <span class="sep"></span>
+        <button id="undo" data-i18n-title="tool.undo" title="Undo (Ctrl+Z)">↶</button>
+        <button id="redo" data-i18n-title="tool.redo" title="Redo (Ctrl+Y)">↷</button>
+        <span class="sep"></span>
+        <button id="fit" data-i18n-title="tool.fit" title="Fit page (0)">⤢</button>
+        <button id="focus" data-i18n-title="tool.focus" title="Zoom to selection (F)">◎</button>
+        <button id="delete-selection" data-i18n-title="tool.delete" title="Delete selection (Del)">🗑</button>
+      </div>
+      <div class="layers" id="layers">
+        <details>
+          <summary data-i18n="layers.title">Layers</summary>
+          <label><input type="checkbox" data-layer="photo" checked> <span data-i18n="layers.photo">Photo</span></label>
+          <label><input type="checkbox" data-layer="dim"> <span data-i18n="layers.dim">Dim photo</span></label>
+          <label><input type="checkbox" data-layer="outlines" checked> <span data-i18n="layers.outlines">Spikelet outlines</span></label>
+          <label><input type="checkbox" data-layer="candidates"> <span data-i18n="layers.candidates">Awn candidates</span></label>
+          <label><input type="checkbox" data-layer="paths" checked> <span data-i18n="layers.paths">Measurement paths</span></label>
+          <label><input type="checkbox" data-layer="labels" checked> <span data-i18n="layers.labels">IDs and lengths</span></label>
+          <div class="threshold">
+            <label for="threshold"><span data-i18n="layers.threshold">Score threshold</span> <output id="threshold-value"></output></label>
+            <input type="range" id="threshold" min="0" max="1" step="0.05">
+            <p class="muted small" data-i18n="layers.thresholdHelp">Candidates below the threshold are hidden; representatives below it need review.</p>
+          </div>
+        </details>
+      </div>
+      <div class="draw-bar" id="draw-bar" hidden>
+        <span id="draw-text"></span>
+        <button class="primary small" id="draw-finish" data-i18n="draw.finish">Finish</button>
+        <button class="small" id="draw-cancel" data-i18n="draw.cancel">Cancel</button>
+      </div>
+    </div>
+    <footer class="statusbar">
+      <span id="hint"></span>
+      <span class="spacer"></span>
+      <span id="cursor"></span>
+      <span id="zoom"></span>
+    </footer>
+  </section>
+
+  <div class="resizer" data-resize="panel"></div>
+  <aside class="panel" id="panel">
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="results" aria-selected="true" data-i18n="tab.results">Results</button>
+      <button role="tab" data-tab="inspect" aria-selected="false" data-i18n="tab.inspect">Inspect</button>
+    </div>
+
+    <section class="tab-body" data-body="results">
+      <div class="summary" id="summary"></div>
+      <div class="filters" id="filters">
+        <button data-filter="all" data-i18n="filter.all">All</button>
+        <button data-filter="pending" data-i18n="filter.pending">Not confirmed</button>
+        <button data-filter="needs_review" data-i18n="filter.needs_review">Needs review</button>
+        <button data-filter="modified" data-i18n="filter.modified">Edited</button>
+        <button data-filter="confirmed" data-i18n="filter.confirmed">Confirmed</button>
+      </div>
+      <div class="table-tools">
+        <input type="search" id="search" data-i18n-placeholder="results.search" placeholder="Search ID">
+        <button class="small" id="confirm-visible" data-i18n="results.confirmVisible">Confirm shown</button>
+      </div>
+      <div class="table-scroll">
+        <table class="results">
+          <thead><tr><th data-i18n="col.id">ID</th><th class="num" data-i18n="col.length">Awn (mm)</th><th data-i18n="col.status">Status</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <p class="muted center" id="no-rows" hidden data-i18n="results.none">No spikelets match.</p>
+      </div>
+
+      <div class="detail" id="detail" hidden>
+        <div class="detail-head">
+          <label class="id-field"><span data-i18n="detail.id">ID</span><input id="detail-name" maxlength="80"></label>
+          <div class="big-length"><output id="detail-length">—</output><small>mm</small></div>
+        </div>
+        <div class="status-line"><span class="badge" id="detail-status"></span><span id="detail-origin" class="muted small"></span></div>
+        <ul class="reasons" id="detail-reasons"></ul>
+        <div class="candidates" id="candidate-nav">
+          <button class="small" id="cand-prev" aria-label="Previous candidate">‹</button>
+          <span id="cand-pos"></span>
+          <button class="small" id="cand-next" aria-label="Next candidate">›</button>
+          <button class="small" id="cand-use" data-i18n="detail.useCandidate">Use as representative</button>
+        </div>
+        <div class="detail-actions">
+          <button class="primary" id="detail-confirm" data-i18n="detail.confirm">Confirm</button>
+          <button id="detail-redraw" data-i18n="detail.redraw">Redraw awn</button>
+          <button id="detail-reset" data-i18n="detail.reset">Restore automatic</button>
+          <button class="danger" id="detail-delete" data-i18n="detail.delete">Delete</button>
+        </div>
+        <p class="muted small" data-i18n="detail.help">Drag a vertex to move it, double-click a path to insert one, right-click a vertex to remove it.</p>
+      </div>
+    </section>
+
+    <section class="tab-body" data-body="inspect" hidden>
+      <p class="muted" id="inspect-empty" data-i18n="inspect.empty">Select a spikelet to see how its awn was reconstructed.</p>
+      <div id="inspect" hidden>
+        <h3 id="inspect-title"></h3>
+        <dl class="facts" id="inspect-facts"></dl>
+        <h4 data-i18n="inspect.candidates">Awn candidates</h4>
+        <table class="results compact">
+          <thead><tr><th>#</th><th class="num" data-i18n="col.length">Awn (mm)</th><th class="num" data-i18n="inspect.score">Score</th><th class="num" data-i18n="inspect.hops">Hops</th><th class="num" data-i18n="inspect.gaps">Gaps</th></tr></thead>
+          <tbody id="inspect-candidates"></tbody>
+        </table>
+        <h4 data-i18n="inspect.run">Run</h4>
+        <dl class="facts" id="inspect-run"></dl>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<dialog id="import-dialog">
+  <form method="dialog">
+    <h2 data-i18n="import.title">Import images</h2>
+    <div class="dropzone" id="dropzone"><p data-i18n="import.drop">Drop JPEG, PNG or WebP files here</p></div>
+    <div class="row">
+      <button type="button" class="primary" id="choose-files" data-i18n="import.files">Choose files</button>
+      <button type="button" id="choose-folder" data-i18n="import.folder">Choose folder</button>
+    </div>
+    <label class="check"><input type="checkbox" id="import-autocal"> <span data-i18n="settings.autoCalibrate">Detect the graph-paper grid after import</span></label>
+    <menu><button value="close" data-i18n="action.close">Close</button></menu>
+  </form>
+</dialog>
+
+<dialog id="calibration-dialog">
+  <form method="dialog" id="calibration-form">
+    <h2 data-i18n="cal.title">Calibration</h2>
+    <p class="muted" id="cal-current"></p>
+    <fieldset>
+      <legend data-i18n="cal.grid">Graph-paper grid (5 mm)</legend>
+      <p class="muted small" data-i18n="cal.gridHelp">Detects the grid lines behind the page and measures x and y separately.</p>
+      <button type="button" id="cal-grid" data-i18n="cal.detect">Detect grid</button>
+      <span id="cal-grid-result" class="small"></span>
+    </fieldset>
+    <fieldset>
+      <legend data-i18n="cal.twoPoint">Known distance</legend>
+      <div class="row">
+        <button type="button" id="cal-draw" data-i18n="cal.draw">Draw on image</button>
+        <span id="cal-pixels" class="muted small"></span>
+      </div>
+      <div class="row">
+        <label><span data-i18n="cal.distance">Distance</span> <input type="number" id="cal-mm" min="0" step="any"></label>
+        <select id="cal-unit"><option value="1">mm</option><option value="10">cm</option><option value="0.001">µm</option></select>
+        <button type="button" id="cal-apply-two" data-i18n="cal.apply">Apply</button>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend data-i18n="cal.ratio">Direct scale</legend>
+      <div class="row">
+        <label><input type="number" id="cal-ratio" min="0" step="any"> mm/px</label>
+        <button type="button" id="cal-apply-ratio" data-i18n="cal.apply">Apply</button>
+      </div>
+    </fieldset>
+    <label class="check"><input type="checkbox" id="cal-propagate"> <span data-i18n="cal.propagate">Also apply to uncalibrated images with the same pixel size</span></label>
+    <p class="error" id="cal-error"></p>
+    <menu><button value="close" data-i18n="action.close">Close</button></menu>
+  </form>
+</dialog>
+
+<dialog id="export-dialog">
+  <form method="dialog">
+    <h2 data-i18n="export.title">Export</h2>
+    <p class="muted" id="export-summary"></p>
+    <div class="export-options">
+      <button type="button" id="export-current"><strong data-i18n="export.current">This image (CSV)</strong><small data-i18n="export.currentHelp">ID and awn length in mm</small></button>
+      <button type="button" id="export-all"><strong data-i18n="export.all">All images (ZIP of CSV)</strong><small data-i18n="export.allHelp">One CSV per measured image</small></button>
+      <button type="button" id="export-detailed"><strong data-i18n="export.detailed">Detailed project CSV</strong><small data-i18n="export.detailedHelp">Automatic and final length, review state, score, calibration</small></button>
+    </div>
+    <menu><button value="close" data-i18n="action.close">Close</button></menu>
+  </form>
+</dialog>
+
+<dialog id="samples-dialog">
+  <form method="dialog">
+    <h2 data-i18n="samples.title">Sample pages</h2>
+    <p class="muted" data-i18n="samples.help">Pages from the development set with their cached automatic results.</p>
+    <ul class="sample-list" id="sample-list"></ul>
+    <menu><button value="close" data-i18n="action.close">Close</button></menu>
+  </form>
+</dialog>
+
+<dialog id="settings-dialog">
+  <form method="dialog" id="settings-form">
+    <h2 data-i18n="settings.title">Settings</h2>
+    <label class="field"><span data-i18n="settings.language">Language</span>
+      <select name="language"><option value="en">English</option><option value="zh">简体中文</option><option value="ja">日本語</option></select></label>
+    <label class="field"><span data-i18n="settings.theme">Theme</span>
+      <select name="theme"><option value="system" data-i18n="settings.themeSystem">System</option><option value="light" data-i18n="settings.themeLight">Light</option><option value="dark" data-i18n="settings.themeDark">Dark</option></select></label>
+    <label class="field"><span data-i18n="settings.threshold">Default score threshold</span><input type="number" name="threshold" min="0" max="1" step="0.05"></label>
+    <label class="check"><input type="checkbox" name="autoCalibrate"> <span data-i18n="settings.autoCalibrate">Detect the graph-paper grid after import</span></label>
+    <label class="check"><input type="checkbox" name="measureAfterImport"> <span data-i18n="settings.measureAfterImport">Measure automatically after import</span></label>
+    <label class="check"><input type="checkbox" name="confirmReplace"> <span data-i18n="settings.confirmReplace">Ask before a new measurement replaces reviewed results</span></label>
+    <label class="check"><input type="checkbox" name="autoAdvance"> <span data-i18n="settings.autoAdvance">Select the next unconfirmed spikelet after confirming</span></label>
+    <label class="check"><input type="checkbox" name="restore"> <span data-i18n="settings.restore">Restore the autosaved project on start</span></label>
+    <label class="field"><span data-i18n="settings.service">Service address</span><input name="serviceBase" placeholder="(same origin)"></label>
+    <menu>
+      <button type="button" class="danger link" id="clear-workspace" data-i18n="settings.clear">Clear workspace</button>
+      <button value="close" data-i18n="action.close">Close</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="confirm-dialog">
+  <form method="dialog">
+    <p id="confirm-text"></p>
+    <menu><button value="cancel" data-i18n="action.cancel">Cancel</button><button value="ok" class="primary" id="confirm-ok" data-i18n="action.ok">OK</button></menu>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" multiple hidden>
+<input type="file" id="folder-input" webkitdirectory multiple hidden>
+<input type="file" id="project-input" accept=".json,application/json" hidden>
+</body>
+</html>

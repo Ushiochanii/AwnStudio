@@ -1,0 +1,250 @@
+// UI copy. English is canonical; other locales fall back to it key by key.
+
+const en = {
+  'step.import': 'Import', 'step.calibrate': 'Calibrate', 'step.measure': 'Measure', 'step.review': 'Review', 'step.export': 'Export',
+  'action.import': 'Import', 'action.openProject': 'Open project', 'action.saveProject': 'Save project', 'action.export': 'Export',
+  'action.calibrate': 'Calibrate', 'action.measure': 'Measure', 'action.remeasure': 'Measure again', 'action.close': 'Close',
+  'action.cancel': 'Cancel', 'action.ok': 'OK',
+  'service.retry': 'Reconnect', 'service.ready': 'Model ready', 'service.idle': 'Service connected', 'service.loading': 'Loading model…',
+  'service.busy': 'Measuring', 'service.offline': 'Service offline', 'service.editOnly': 'Edit only (no model)',
+  'service.error': 'Model failed to load',
+  'save.dirty': 'Unsaved', 'save.saving': 'Saving…', 'save.saved': 'Saved', 'save.error': 'Autosave failed',
+  'images.title': 'Images', 'images.selectAll': 'Select all', 'images.deleteSelected': 'Delete selected',
+  'images.uncalibrated': 'No scale', 'images.measured': '{n} spikelets', 'images.notMeasured': 'Not measured',
+  'images.confirmed': '{done}/{n} confirmed',
+  'job.queued': 'Queued', 'job.running': 'Measuring', 'job.error': 'Failed', 'job.done': 'Done',
+  'job.stage.queued': 'Waiting for the service…', 'job.stage.calibrate': 'Detecting the grid…',
+  'job.stage.detect': 'Detecting spikelets and awns… {pct}%', 'job.stage.reconstruct': 'Reconstructing awns…',
+  'job.stage.loading': 'Loading the model…',
+  'batch.run': 'Measure all pending', 'batch.stop': 'Stop after current', 'batch.progress': 'Batch {done}/{total}',
+  'batch.none': 'Every image already has a measurement.', 'batch.stopping': 'Stopping after the current image.',
+  'samples.open': 'Open sample pages…', 'samples.title': 'Sample pages',
+  'samples.help': 'Pages from the development set with their cached automatic results.',
+  'samples.none': 'The service has no sample pages.', 'samples.loaded': 'Loaded {name}',
+  'empty.title': 'Drop page images here, or import them.',
+  'notice.stale': 'Calibration changed after measurement. Lengths use the new scale; measure again to rerun reconstruction with it.',
+  'tool.select': 'Select and edit (V)', 'tool.spikelet': 'Add missed spikelet (N)', 'tool.awn': 'Redraw awn of selected spikelet (A)',
+  'tool.ruler': 'Two-point calibration (R)', 'tool.undo': 'Undo (Ctrl+Z)', 'tool.redo': 'Redo (Ctrl+Y)', 'tool.fit': 'Fit page (0)',
+  'tool.focus': 'Zoom to selection (F)', 'tool.delete': 'Delete selection (Del)',
+  'hint.select': 'Click to select · Shift-drag to box-select · drag to pan · wheel to zoom',
+  'hint.awn': 'Click from the awn base to its tip · double-click or Enter to finish · right-click removes a point',
+  'hint.spikelet': 'Click around the spikelet outline · double-click or Enter to finish',
+  'hint.ruler': 'Click two points a known distance apart',
+  'hint.needSelection': 'Select a spikelet first.',
+  'draw.finish': 'Finish', 'draw.cancel': 'Cancel', 'draw.points': '{n} points',
+  'draw.tooSmall': 'The outline is too small; click at least three points around the spikelet.',
+  'layers.title': 'Layers', 'layers.photo': 'Photo', 'layers.dim': 'Dim photo', 'layers.outlines': 'Spikelet outlines',
+  'layers.candidates': 'Awn candidates', 'layers.paths': 'Measurement paths', 'layers.labels': 'IDs and lengths',
+  'layers.threshold': 'Score threshold',
+  'layers.thresholdHelp': 'Candidates below the threshold are hidden; representatives below it need review.',
+  'tab.results': 'Results', 'tab.inspect': 'Inspect',
+  'summary.spikelets': 'Spikelets', 'summary.mean': 'Mean awn (mm)', 'summary.confirmed': 'Confirmed',
+  'filter.all': 'All', 'filter.pending': 'Not confirmed', 'filter.needs_review': 'Needs review', 'filter.modified': 'Edited',
+  'filter.confirmed': 'Confirmed',
+  'results.search': 'Search ID', 'results.confirmVisible': 'Confirm shown', 'results.none': 'No spikelets match.',
+  'results.confirmedN': 'Confirmed {n} spikelets.',
+  'col.id': 'ID', 'col.length': 'Awn (mm)', 'col.status': 'Status',
+  'status.automatic': 'Automatic', 'status.needs_review': 'Needs review', 'status.modified': 'Edited',
+  'status.confirmed': 'Confirmed', 'status.missing': 'No awn',
+  'reason.calibration_qc': 'The grid calibration did not pass its quality checks',
+  'reason.weak_spikelet': 'The spikelet detection is weak',
+  'reason.low_score': 'The awn score is below the threshold',
+  'reason.gap_bridged': 'The awn path bridges a gap in the evidence',
+  'reason.long_chain': 'The awn was assembled from several fragments',
+  'origin.auto': 'Automatic measurement', 'origin.manual': 'Added by hand', 'origin.edited': 'Edited by hand',
+  'detail.id': 'ID', 'detail.confirm': 'Confirm', 'detail.unconfirm': 'Unconfirm', 'detail.redraw': 'Redraw awn',
+  'detail.reset': 'Restore automatic', 'detail.delete': 'Delete', 'detail.useCandidate': 'Use as representative',
+  'detail.candidate': 'Candidate {k} of {n}', 'detail.multi': '{n} spikelets selected',
+  'detail.help': 'Drag a vertex to move it, double-click a path to insert one, right-click a vertex to remove it.',
+  'detail.nameTaken': 'IDs must be unique and non-empty.', 'detail.cannotConfirm': 'Draw the awn before confirming.',
+  'inspect.empty': 'Select a spikelet to see how its awn was reconstructed.', 'inspect.candidates': 'Awn candidates',
+  'inspect.score': 'Score', 'inspect.hops': 'Hops', 'inspect.gaps': 'Gaps', 'inspect.run': 'Run',
+  'inspect.uid': 'Record', 'inspect.spikeletConfidence': 'Spikelet confidence', 'inspect.origin': 'Origin',
+  'inspect.status': 'Status', 'inspect.pRoot': 'Root probability', 'inspect.traceProb': 'Trace probability',
+  'inspect.serviceLength': 'Service length (mm)', 'inspect.currentLength': 'Current length (mm)',
+  'inspect.points': 'Path points', 'inspect.method': 'Method', 'inspect.model': 'Model', 'inspect.elapsed': 'Run time',
+  'inspect.measuredAt': 'Measured', 'inspect.periods': 'Grid period (px / 5 mm)', 'inspect.qc': 'Calibration QC',
+  'inspect.qcOk': 'passed', 'inspect.none': 'none',
+  'import.title': 'Import images', 'import.drop': 'Drop JPEG, PNG or WebP files here', 'import.files': 'Choose files',
+  'import.folder': 'Choose folder', 'import.done': 'Imported {n} images.', 'import.failed': 'Could not read {name}.',
+  'cal.title': 'Calibration', 'cal.current': 'Current scale: {value} ({method})', 'cal.none': 'This image has no scale yet.',
+  'cal.grid': 'Graph-paper grid (5 mm)',
+  'cal.gridHelp': 'Detects the grid lines behind the page and measures x and y separately.',
+  'cal.detect': 'Detect grid', 'cal.detecting': 'Detecting…', 'cal.gridResult': 'x {x} px, y {y} px per 5 mm',
+  'cal.gridWarn': 'Quality checks failed: {reasons}',
+  'cal.twoPoint': 'Known distance', 'cal.draw': 'Draw on image', 'cal.pixels': '{px} px drawn', 'cal.distance': 'Distance',
+  'cal.apply': 'Apply', 'cal.ratio': 'Direct scale',
+  'cal.propagate': 'Also apply to uncalibrated images with the same pixel size',
+  'cal.applied': 'Calibration applied.', 'cal.appliedMore': 'Calibration applied to this and {n} other images.',
+  'cal.invalid': 'Enter a positive number.', 'cal.needLine': 'Draw a line on the image first.',
+  'method.grid': 'grid', 'method.two_point': 'known distance', 'method.ratio': 'direct',
+  'chip.none': 'No scale', 'chip.qc': 'check grid',
+  'export.title': 'Export', 'export.current': 'This image (CSV)', 'export.currentHelp': 'ID and awn length in mm',
+  'export.all': 'All images (ZIP of CSV)', 'export.allHelp': 'One CSV per measured image',
+  'export.detailed': 'Detailed project CSV', 'export.detailedHelp': 'Automatic and final length, review state, score, calibration',
+  'export.summary': '{pages} images with measurements, {spikelets} spikelets, {pending} not yet confirmed.',
+  'export.nothing': 'Nothing to export yet.', 'export.uncalibrated': '{n} images have no scale; their lengths are blank.',
+  'settings.title': 'Settings', 'settings.language': 'Language', 'settings.theme': 'Theme', 'settings.themeSystem': 'System',
+  'settings.themeLight': 'Light', 'settings.themeDark': 'Dark', 'settings.threshold': 'Default score threshold',
+  'settings.autoCalibrate': 'Detect the graph-paper grid after import',
+  'settings.measureAfterImport': 'Measure automatically after import',
+  'settings.confirmReplace': 'Ask before a new measurement replaces reviewed results',
+  'settings.autoAdvance': 'Select the next unconfirmed spikelet after confirming',
+  'settings.restore': 'Restore the autosaved project on start', 'settings.service': 'Service address',
+  'settings.clear': 'Clear workspace',
+  'ask.replace': '{name} has reviewed or edited spikelets. Replace them with a new automatic measurement?',
+  'ask.deleteImages': 'Delete {n} images and their measurements?', 'ask.deleteSpikelets': 'Delete {n} spikelets?',
+  'ask.openProject': 'Opening a project replaces the {n} images in the workspace. Continue?',
+  'ask.clear': 'Remove every image and measurement from this browser?',
+  'project.saved': 'Project saved.', 'project.opened': 'Opened {n} images.', 'project.invalid': 'Could not open project: {error}',
+  'error.service': 'The measurement service is not available.', 'error.measure': 'Measurement of {name} failed: {error}',
+  'error.calibrate': 'Grid detection failed: {error}', 'measure.done': '{name}: {n} spikelets measured.'
+};
+
+const zh = {
+  'step.import': '导入', 'step.calibrate': '标定', 'step.measure': '测量', 'step.review': '审核', 'step.export': '导出',
+  'action.import': '导入', 'action.openProject': '打开项目', 'action.saveProject': '保存项目', 'action.export': '导出',
+  'action.calibrate': '标定', 'action.measure': '测量', 'action.remeasure': '重新测量', 'action.close': '关闭',
+  'action.cancel': '取消', 'action.ok': '确定',
+  'service.retry': '重新连接', 'service.ready': '模型就绪', 'service.idle': '服务已连接', 'service.loading': '正在加载模型…',
+  'service.busy': '测量中', 'service.offline': '服务未连接', 'service.editOnly': '仅编辑（无模型）', 'service.error': '模型加载失败',
+  'save.dirty': '未保存', 'save.saving': '保存中…', 'save.saved': '已保存', 'save.error': '自动保存失败',
+  'images.title': '图像', 'images.selectAll': '全选', 'images.deleteSelected': '删除所选',
+  'images.uncalibrated': '未标定', 'images.measured': '{n} 个小穗', 'images.notMeasured': '未测量',
+  'images.confirmed': '已确认 {done}/{n}',
+  'job.queued': '排队中', 'job.running': '测量中', 'job.error': '失败', 'job.done': '完成',
+  'job.stage.queued': '等待服务…', 'job.stage.calibrate': '正在识别网格…', 'job.stage.detect': '正在检测小穗和芒… {pct}%',
+  'job.stage.reconstruct': '正在重建芒…', 'job.stage.loading': '正在加载模型…',
+  'batch.run': '测量全部未测图像', 'batch.stop': '当前完成后停止', 'batch.progress': '批量 {done}/{total}',
+  'batch.none': '所有图像都已有测量结果。', 'batch.stopping': '将在当前图像完成后停止。',
+  'samples.open': '打开示例页面…', 'samples.title': '示例页面', 'samples.help': '开发集中的页面及其已缓存的自动结果。',
+  'samples.none': '服务没有示例页面。', 'samples.loaded': '已载入 {name}',
+  'empty.title': '把页面图像拖到这里，或点击导入。',
+  'notice.stale': '测量后标定已更改。长度已按新比例换算；如需用新比例重新重建，请重新测量。',
+  'tool.select': '选择与编辑 (V)', 'tool.spikelet': '补充漏检小穗 (N)', 'tool.awn': '重画所选小穗的芒 (A)',
+  'tool.ruler': '两点标定 (R)', 'tool.undo': '撤销 (Ctrl+Z)', 'tool.redo': '重做 (Ctrl+Y)', 'tool.fit': '适应页面 (0)',
+  'tool.focus': '缩放到所选 (F)', 'tool.delete': '删除所选 (Del)',
+  'hint.select': '单击选择 · Shift 拖动框选 · 拖动平移 · 滚轮缩放',
+  'hint.awn': '从芒基部依次点到芒尖 · 双击或回车完成 · 右键删除一个点',
+  'hint.spikelet': '沿小穗轮廓依次单击 · 双击或回车完成', 'hint.ruler': '单击已知距离的两个端点',
+  'hint.needSelection': '请先选择一个小穗。',
+  'draw.finish': '完成', 'draw.cancel': '取消', 'draw.points': '{n} 个点',
+  'draw.tooSmall': '轮廓太小，请围绕小穗至少点三个点。',
+  'layers.title': '图层', 'layers.photo': '照片', 'layers.dim': '淡化照片', 'layers.outlines': '小穗轮廓',
+  'layers.candidates': '候选芒', 'layers.paths': '测量路径', 'layers.labels': '编号与长度', 'layers.threshold': '得分阈值',
+  'layers.thresholdHelp': '低于阈值的候选芒被隐藏；代表芒低于阈值时需要审核。',
+  'tab.results': '结果', 'tab.inspect': '检查',
+  'summary.spikelets': '小穗', 'summary.mean': '平均芒长 (mm)', 'summary.confirmed': '已确认',
+  'filter.all': '全部', 'filter.pending': '未确认', 'filter.needs_review': '需审核', 'filter.modified': '已编辑', 'filter.confirmed': '已确认',
+  'results.search': '搜索编号', 'results.confirmVisible': '确认当前列表', 'results.none': '没有匹配的小穗。',
+  'results.confirmedN': '已确认 {n} 个小穗。',
+  'col.id': '编号', 'col.length': '芒长 (mm)', 'col.status': '状态',
+  'status.automatic': '自动', 'status.needs_review': '需审核', 'status.modified': '已编辑', 'status.confirmed': '已确认', 'status.missing': '无芒',
+  'reason.calibration_qc': '网格标定未通过质量检查', 'reason.weak_spikelet': '小穗检测置信度低',
+  'reason.low_score': '芒得分低于阈值', 'reason.gap_bridged': '芒路径跨越了证据缺口', 'reason.long_chain': '芒由多个片段拼接而成',
+  'origin.auto': '自动测量', 'origin.manual': '手动添加', 'origin.edited': '手动编辑',
+  'detail.id': '编号', 'detail.confirm': '确认', 'detail.unconfirm': '取消确认', 'detail.redraw': '重画芒',
+  'detail.reset': '恢复自动结果', 'detail.delete': '删除', 'detail.useCandidate': '设为代表芒',
+  'detail.candidate': '候选 {k}/{n}', 'detail.multi': '已选 {n} 个小穗',
+  'detail.help': '拖动顶点可移动，双击路径可插入顶点，右键顶点可删除。',
+  'detail.nameTaken': '编号不能为空且不能重复。', 'detail.cannotConfirm': '请先画出芒再确认。',
+  'inspect.empty': '选择一个小穗，查看它的芒是如何重建的。', 'inspect.candidates': '候选芒',
+  'inspect.score': '得分', 'inspect.hops': '跳数', 'inspect.gaps': '缺口', 'inspect.run': '运行信息',
+  'inspect.uid': '记录', 'inspect.spikeletConfidence': '小穗置信度', 'inspect.origin': '来源', 'inspect.status': '状态',
+  'inspect.pRoot': '根部概率', 'inspect.traceProb': '追踪概率', 'inspect.serviceLength': '服务端长度 (mm)',
+  'inspect.currentLength': '当前长度 (mm)', 'inspect.points': '路径点数', 'inspect.method': '方法', 'inspect.model': '模型',
+  'inspect.elapsed': '耗时', 'inspect.measuredAt': '测量时间', 'inspect.periods': '网格周期 (px / 5 mm)', 'inspect.qc': '标定质检',
+  'inspect.qcOk': '通过', 'inspect.none': '无',
+  'import.title': '导入图像', 'import.drop': '把 JPEG、PNG 或 WebP 文件拖到这里', 'import.files': '选择文件',
+  'import.folder': '选择文件夹', 'import.done': '已导入 {n} 张图像。', 'import.failed': '无法读取 {name}。',
+  'cal.title': '标定', 'cal.current': '当前比例：{value}（{method}）', 'cal.none': '此图像尚未标定。',
+  'cal.grid': '方格纸网格 (5 mm)', 'cal.gridHelp': '识别页面背后的网格线，分别测量 x 和 y 方向。',
+  'cal.detect': '识别网格', 'cal.detecting': '识别中…', 'cal.gridResult': 'x {x} px、y {y} px / 5 mm',
+  'cal.gridWarn': '质量检查未通过：{reasons}',
+  'cal.twoPoint': '已知距离', 'cal.draw': '在图上画线', 'cal.pixels': '已画 {px} px', 'cal.distance': '距离',
+  'cal.apply': '应用', 'cal.ratio': '直接输入比例', 'cal.propagate': '同时应用到像素尺寸相同且未标定的图像',
+  'cal.applied': '已应用标定。', 'cal.appliedMore': '已应用到本图及另外 {n} 张图像。',
+  'cal.invalid': '请输入正数。', 'cal.needLine': '请先在图上画线。',
+  'method.grid': '网格', 'method.two_point': '已知距离', 'method.ratio': '直接输入',
+  'chip.none': '未标定', 'chip.qc': '请检查网格',
+  'export.title': '导出', 'export.current': '当前图像 (CSV)', 'export.currentHelp': '编号与芒长 (mm)',
+  'export.all': '全部图像 (CSV 压缩包)', 'export.allHelp': '每张已测图像一个 CSV',
+  'export.detailed': '详细项目 CSV', 'export.detailedHelp': '自动与最终长度、审核状态、得分、标定',
+  'export.summary': '{pages} 张图像有测量结果，共 {spikelets} 个小穗，{pending} 个尚未确认。',
+  'export.nothing': '还没有可导出的内容。', 'export.uncalibrated': '{n} 张图像未标定，长度将为空。',
+  'settings.title': '设置', 'settings.language': '语言', 'settings.theme': '主题', 'settings.themeSystem': '跟随系统',
+  'settings.themeLight': '浅色', 'settings.themeDark': '深色', 'settings.threshold': '默认得分阈值',
+  'settings.autoCalibrate': '导入后自动识别方格纸网格', 'settings.measureAfterImport': '导入后自动测量',
+  'settings.confirmReplace': '新测量将替换已审核结果时先询问', 'settings.autoAdvance': '确认后自动选中下一个未确认小穗',
+  'settings.restore': '启动时恢复自动保存的项目', 'settings.service': '服务地址', 'settings.clear': '清空工作区',
+  'ask.replace': '{name} 中有已审核或已编辑的小穗。要用新的自动测量替换吗？',
+  'ask.deleteImages': '删除 {n} 张图像及其测量结果？', 'ask.deleteSpikelets': '删除 {n} 个小穗？',
+  'ask.openProject': '打开项目会替换工作区中的 {n} 张图像。继续吗？', 'ask.clear': '从此浏览器中移除所有图像和测量结果？',
+  'project.saved': '项目已保存。', 'project.opened': '已打开 {n} 张图像。', 'project.invalid': '无法打开项目：{error}',
+  'error.service': '测量服务不可用。', 'error.measure': '{name} 测量失败：{error}', 'error.calibrate': '网格识别失败：{error}',
+  'measure.done': '{name}：已测量 {n} 个小穗。'
+};
+
+const ja = {
+  'step.import': '読み込み', 'step.calibrate': '校正', 'step.measure': '計測', 'step.review': 'レビュー', 'step.export': '書き出し',
+  'action.import': '読み込み', 'action.openProject': 'プロジェクトを開く', 'action.saveProject': 'プロジェクトを保存',
+  'action.export': '書き出し', 'action.calibrate': '校正', 'action.measure': '計測', 'action.remeasure': '再計測',
+  'action.close': '閉じる', 'action.cancel': 'キャンセル', 'action.ok': 'OK',
+  'service.retry': '再接続', 'service.ready': 'モデル準備完了', 'service.idle': 'サービス接続済み', 'service.loading': 'モデル読み込み中…',
+  'service.busy': '計測中', 'service.offline': 'サービス未接続', 'service.editOnly': '編集のみ（モデルなし）',
+  'service.error': 'モデルの読み込みに失敗',
+  'save.dirty': '未保存', 'save.saving': '保存中…', 'save.saved': '保存済み', 'save.error': '自動保存に失敗',
+  'images.title': '画像', 'images.selectAll': 'すべて選択', 'images.deleteSelected': '選択を削除',
+  'images.uncalibrated': '未校正', 'images.measured': '小穂 {n}', 'images.notMeasured': '未計測', 'images.confirmed': '確認 {done}/{n}',
+  'job.queued': '待機中', 'job.running': '計測中', 'job.error': '失敗', 'job.done': '完了',
+  'batch.run': '未計測をすべて計測', 'batch.stop': '現在の画像の後で停止', 'batch.progress': '一括 {done}/{total}',
+  'tab.results': '結果', 'tab.inspect': '検査',
+  'filter.all': 'すべて', 'filter.pending': '未確認', 'filter.needs_review': '要レビュー', 'filter.modified': '編集済み',
+  'filter.confirmed': '確認済み',
+  'col.id': 'ID', 'col.length': '芒長 (mm)', 'col.status': '状態',
+  'status.automatic': '自動', 'status.needs_review': '要レビュー', 'status.modified': '編集済み', 'status.confirmed': '確認済み',
+  'status.missing': '芒なし',
+  'detail.confirm': '確認', 'detail.unconfirm': '確認を取り消す', 'detail.redraw': '芒を描き直す', 'detail.reset': '自動結果に戻す',
+  'detail.delete': '削除', 'detail.useCandidate': '代表芒にする',
+  'layers.title': 'レイヤー', 'layers.photo': '写真', 'layers.outlines': '小穂の輪郭', 'layers.candidates': '芒の候補',
+  'layers.paths': '計測パス', 'layers.labels': 'ID と長さ', 'layers.threshold': 'スコアしきい値',
+  'cal.title': '校正', 'cal.grid': '方眼紙グリッド (5 mm)', 'cal.detect': 'グリッドを検出', 'cal.twoPoint': '既知の距離',
+  'cal.ratio': '倍率を直接入力', 'cal.apply': '適用',
+  'export.title': '書き出し', 'settings.title': '設定', 'settings.language': '言語', 'settings.theme': 'テーマ'
+};
+
+const LOCALES = {en, zh, ja};
+let locale = 'en';
+
+export const locales = Object.keys(LOCALES);
+
+export function setLocale(next) {
+  locale = LOCALES[next] ? next : 'en';
+  if (globalThis.document) document.documentElement.lang = {en: 'en', zh: 'zh-CN', ja: 'ja'}[locale];
+}
+
+export const getLocale = () => locale;
+
+export function t(key, vars = {}) {
+  const text = LOCALES[locale][key] ?? en[key] ?? key;
+  return text.replace(/\{(\w+)\}/g, (_, name) => (name in vars ? String(vars[name]) : `{${name}}`));
+}
+
+export function guessLocale(languages = []) {
+  for (const tag of languages) {
+    const base = String(tag).toLowerCase().split('-')[0];
+    if (LOCALES[base]) return base;
+  }
+  return 'en';
+}
+
+export function applyTranslations(root = document) {
+  for (const el of root.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
+  for (const el of root.querySelectorAll('[data-i18n-title]')) {
+    el.title = t(el.dataset.i18nTitle);
+    el.setAttribute('aria-label', el.title);
+  }
+  for (const el of root.querySelectorAll('[data-i18n-placeholder]')) el.placeholder = t(el.dataset.i18nPlaceholder);
+}
+
+export const keys = locale_ => Object.keys(LOCALES[locale_] ?? {});
