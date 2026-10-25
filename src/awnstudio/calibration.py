@@ -62,6 +62,25 @@ class Calibration:
         return cls(period, period)
 
 
+def calibrate_cached(page_id: str) -> Calibration:
+    """Calibrate a dataset page once and memoize it under runs/calibration/."""
+    import json
+
+    from .paths import paths
+
+    target = paths().runs / "calibration" / f"{page_id}.json"
+    if target.exists():
+        d = json.loads(target.read_text())
+        return Calibration(d["x"], d["y"], d["adequate"], tuple(d["qc_reasons"]))
+    calibration = calibrate_page(cv2.imread(str(paths().page_image(page_id))))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps({
+        "x": calibration.x_period_px, "y": calibration.y_period_px,
+        "adequate": calibration.adequate, "qc_reasons": list(calibration.qc_reasons),
+    }))
+    return calibration
+
+
 def grid_response(image_bgr: np.ndarray) -> np.ndarray:
     b, g, r = cv2.split(image_bgr.astype(np.float32))
     score = np.clip((b - r) * 0.7 + (g - r) * 0.3, 0.0, None)
