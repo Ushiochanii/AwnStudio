@@ -14,8 +14,12 @@ from awnstudio.paths import REPO_ROOT, paths
 
 
 def load(split, kind):
-    path = paths().runs / "linkdata" / split / f"{kind}.jsonl"
-    return [r for r in map(json.loads, path.read_text().splitlines()) if r["known"]]
+    source = "junction" if kind == "branch" else kind
+    path = paths().runs / "linkdata" / split / f"{source}.jsonl"
+    rows = [r for r in map(json.loads, path.read_text().splitlines()) if r["known"]]
+    if kind == "branch":  # second awn of the same spikelet leaving the junction
+        rows = [{**r, "label": r["branch"]} for r in rows]
+    return rows
 
 
 def main():

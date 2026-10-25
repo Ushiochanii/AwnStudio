@@ -15,7 +15,7 @@ from awnstudio.cache import load_observations
 from awnstudio.calibration import calibrate_cached
 from awnstudio.detection import primary
 from awnstudio.events import gaps, junctions, roots
-from awnstudio.labels import assign_truth, continues, root_correct
+from awnstudio.labels import assign_truth, branches, continues, root_correct
 from awnstudio.paths import paths
 from awnstudio.spikelets import fuse_spikelets
 from awnstudio.splits import pages
@@ -49,7 +49,8 @@ def page_records(page: str, split: str):
                             "terminal": int(graph.degree(e.u) == 1) + int(graph.degree(e.v) == 1)})
     for j in junctions(graph, cal):
         label = continues(ta, j.a, j.b, far(j.a, j.node), at(j.node), at(j.node), far(j.b, j.node))
-        out["junction"].append({**dataclasses.asdict(j), "page": page, "label": label,
+        branch = branches(ta, j.a, j.b, far(j.a, j.node), at(j.node), far(j.b, j.node))
+        out["junction"].append({**dataclasses.asdict(j), "page": page, "label": label, "branch": branch,
                                 "len_a_mm": edge_len(j.a), "len_b_mm": edge_len(j.b),
                                 "known": ta.edge_awn.get(j.a) is not None})
     for g in gaps(graph, cal):

@@ -150,6 +150,23 @@ def continues(ta: TruthAssignment, a: int, b: int, p0, p1, p2, p3) -> bool:
     return s[1] - s[0] >= MONOTONE_MIN_MM and s[3] - s[2] >= MONOTONE_MIN_MM and s[2] - s[1] >= -MONOTONE_MIN_MM
 
 
+def branches(ta: TruthAssignment, a: int, b: int, p0, p1, p3) -> bool:
+    """At node p1, reached along edge a (from p0), a second awn of the same spikelet
+    leaves along edge b (towards p3): a and b lie on different truth awns of one
+    spikelet and both progress away from the spikelet base."""
+    wa, wb = ta.edge_awn.get(a), ta.edge_awn.get(b)
+    if wa is None or wb is None or wa == wb:
+        return False
+    sa, sb = ta.awn_spikelet.get(wa), ta.awn_spikelet.get(wb)
+    if sa is None or sa != sb:
+        return False
+    s0, s1 = ta.arc(wa, p0), ta.arc(wa, p1)
+    t1, t3 = ta.arc(wb, p1), ta.arc(wb, p3)
+    if None in (s0, s1, t1, t3):
+        return False
+    return s1 - s0 >= MONOTONE_MIN_MM and t3 - t1 >= MONOTONE_MIN_MM
+
+
 def root_correct(ta: TruthAssignment, spikelet: int, edge: int, p_node, p_far) -> bool:
     """Branch `edge` leaves spikelet's base region along one of that spikelet's truth awns."""
     awn = ta.edge_awn.get(edge)

@@ -28,14 +28,19 @@ FEATURES = {
         ("deflection^2", "shared_support", "width_ratio"),
         lambda r: [_sq(r["deflection_deg"]), r["shared_support"], r["width_ratio"]],
     ),
+    # At a junction on an awn, does a second awn of the same spikelet leave along b?
+    "branch": (
+        ("deflection^2", "shared_support", "width_ratio"),
+        lambda r: [_sq(r["deflection_deg"]), r["shared_support"], r["width_ratio"]],
+    ),
     "gap": (
         ("distance_mm", "turn_in^2", "turn_out^2", "turn_in*turn_out"),
         lambda r: [r["distance_mm"], _sq(r["turn_in_deg"]), _sq(r["turn_out_deg"]),
                    math.sqrt(_sq(r["turn_in_deg"]) * _sq(r["turn_out_deg"]))],
     ),
     "root": (
-        ("distance_mm", "axis^2", "inside"),
-        lambda r: [r["distance_mm"], _sq(r["axis_deg"]), float(r["inside"])],
+        ("distance_mm", "axis^2", "inside", "up"),
+        lambda r: [r["distance_mm"], _sq(r["axis_deg"]), float(r["inside"]), r["up"]],
     ),
     # Is an evidence edge part of some awn (vs. clutter: label text, debris, tape edges)?
     "edge": (

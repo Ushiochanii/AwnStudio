@@ -58,6 +58,7 @@ class Root:
     distance_mm: float  # node to spikelet polygon (0 if inside)
     axis_deg: float  # branch direction vs. spikelet long axis pointing away from centroid
     inside: bool
+    up: float  # cosine between branch direction and page up (awns are mounted upward)
 
 
 def path_mm(graph: AwnGraph, edge: int, start: int, cal: Calibration) -> np.ndarray:
@@ -102,28 +103,34 @@ def junctions(graph: AwnGraph, cal: Calibration) -> list[Junction]:
 
 
 def gaps(graph: AwnGraph, cal: Calibration) -> list[Gap]:
+    """Jumps from an end point to any node nearby (end point or junction), departing
+    along each edge there. A broken awn can resume at another fragment's end, or merge
+    into a junction where its continuation meets another awn."""
     ends = [n for n in graph.nodes if graph.degree(n) == 1]
-    if len(ends) < 2:
+    nodes = list(graph.nodes)
+    if not ends or len(nodes) < 2:
         return []
-    pos = np.asarray([cal.to_mm(graph.nodes[n][None])[0] for n in ends])
+    pos = np.asarray([cal.to_mm(graph.nodes[n][None])[0] for n in nodes])
+    index = {n: k for k, n in enumerate(nodes)}
     out = []
-    for p, i in enumerate(ends):
+    for i in ends:
+        p = index[i]
         d = np.linalg.norm(pos - pos[p], axis=1)
         a = graph.incident[i][0]
         da = arrive_dir(graph, a, i, cal)
         for q in np.nonzero((d > 0) & (d <= GAP_SEARCH_MM))[0]:
-            j = ends[q]
-            b = graph.incident[j][0]
-            if a == b:
-                continue
-            db = depart_dir(graph, b, j, cal)
+            j = nodes[q]
             chord = pos[q] - pos[p]
-            out.append(Gap(
-                i, j, a, b, float(d[q]),
-                180.0 if da is None else angle_between(da, chord),
-                180.0 if db is None else angle_between(chord, db),
-                _jaccard(graph.edges[a].support, graph.edges[b].support),
-            ))
+            for b in graph.incident[j]:
+                if b == a:
+                    continue
+                db = depart_dir(graph, b, j, cal)
+                out.append(Gap(
+                    i, j, a, b, float(d[q]),
+                    180.0 if da is None else angle_between(da, chord),
+                    180.0 if db is None else angle_between(chord, db),
+                    _jaccard(graph.edges[a].support, graph.edges[b].support),
+                ))
     return out
 
 
@@ -163,5 +170,6 @@ def roots(graph: AwnGraph, spikelet_geoms: list, cal: Calibration) -> list[Root]
             axis = _axis_away(geom, p_mm, cal)
             for e in graph.incident[node]:
                 d = depart_dir(graph, e, node, cal)
-                out.append(Root(s, node, e, dist, 180.0 if d is None else angle_between(axis, d), inside))
+                up = 0.0 if d is None else float(-d[1] / max(1e-9, np.linalg.norm(d)))
+                out.append(Root(s, node, e, dist, 180.0 if d is None else angle_between(axis, d), inside, up))
     return out
