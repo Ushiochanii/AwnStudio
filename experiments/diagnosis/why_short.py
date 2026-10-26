@@ -85,13 +85,20 @@ def run(job):
                 mech = "blocked_same_spikelet" if same else "blocked_other_spikelet"
             else:
                 mech = "stopped"
-        else:
-            mech = "jump"
+        else:  # which truth awn did it jump onto: a sibling (same truth spikelet) or another spikelet's?
+            pts = np.asarray(path)
+            others = [j for j in tree.query(LineString(path)) if int(j) != r["main"]
+                      and shapely.contains_xy(awns[int(j)].mask, pts[:, 0], pts[:, 1]).sum() >= 3]
+            sib = any(awns[int(j)].spikelet is not None and awns[int(j)].spikelet == main.spikelet for j in others)
+            mech = "jump_sibling" if sib else "jump_other_spikelet"
+            # does the jumped path end longer than its own truth awn? (inflates the representative)
+            out_len = sel.trace.length_mm - main.length_mm
         # how many truth awns does the stop node's edge carry (shared ridge)?
         hw = graph.edges[last_edge].half_width_px * (sx + sy) / 2
         out.append({"page": page, "cls": r["cls"], "mech": mech, "degree": graph.degree(node),
                     "n_options": len(jopts) + len(gopts), "last_half_width_mm": hw,
-                    "missing_tip_mm": r["missing_tip_mm"]})
+                    "missing_tip_mm": r["missing_tip_mm"],
+                    "excess_mm": sel.trace.length_mm - main.length_mm if r["cls"] == "JUMP" else None})
     return out
 
 
@@ -109,6 +116,10 @@ def main():
             rows += r
     print(a.input, a.split, Counter((r["cls"], r["mech"]) for r in rows))
     print("stop-node degree", Counter((r["mech"], r["degree"]) for r in rows))
+    for m in ("jump_sibling", "jump_other_spikelet"):
+        ex = [r["excess_mm"] for r in rows if r["mech"] == m]
+        if ex:
+            print(m, "path minus own truth length: median %.1f mm, >2 mm longer: %d/%d" % (np.median(ex), sum(e > 2 for e in ex), len(ex)))
     out = paths().runs / "diagnosis" / f"why_{a.input}_{a.split}.json"
     out.write_text(json.dumps(rows, indent=1))
 

@@ -35,7 +35,7 @@ from shapely.ops import substring
 from .calibration import Calibration
 from .detection import Observation
 from .labels import polygon_axis
-from .measurement import trim_root
+from .measurement import measure_path_mm, trim_root
 from .spikelets import match_to_truth
 from .truth import TruthInstance
 
@@ -117,7 +117,8 @@ def truth_awns(truth: list[TruthInstance], calibration: Calibration) -> tuple[li
                 coords = list(axis.coords) if e == 0 else list(axis.coords)[::-1]
                 trimmed = trim_root(coords, spikelets[spikelet])
                 axis = LineString(trimmed) if len(trimmed) >= 2 else None
-        length = calibration.length_mm(np.asarray(axis.coords)) if axis is not None else 0.0
+        # Same convention as the pipeline (DP1 arc length): the raw skeleton staircase is ~3% longer.
+        length = measure_path_mm(list(axis.coords), calibration) if axis is not None else 0.0
         out.append(TruthAwn(k, t.geometry, t.geometry.buffer(AWN_TOL_PX), axis, spikelet, length))
     return out, spikelets
 
