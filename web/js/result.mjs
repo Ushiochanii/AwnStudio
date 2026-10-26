@@ -28,18 +28,34 @@ function largestRing(wkt) {
 
 export function spikeletsFromResult(data) {
   validateServiceResult(data);
+  const growth = data.stages?.growth ?? {};
+  const alternatives = data.stages?.alternatives ?? {};
   const records = data.spikelets.map(s => {
     const polygon = largestRing(s.geometry_wkt);
     if (!polygon) return null;
-    const candidates = s.awns
-      .filter(a => Array.isArray(a.path_px) && a.path_px.length >= 2)
-      .map(a => ({
-        path: clonePoints(a.path_px),
-        score: Number.isFinite(a.score) ? a.score : null,
-        serviceMm: Number.isFinite(a.length_mm) ? a.length_mm : null,
-        meta: {...(a.meta ?? {})}
-      }));
-    const rep = Number.isInteger(s.representative) && candidates[s.representative] ? s.representative : null;
+    // Awns keep their service order: growth[k] belongs to awns[k].
+    const chosen = s.awns.map((a, k) => ({
+      path: clonePoints(a.path_px),
+      score: Number.isFinite(a.score) ? a.score : null,
+      serviceMm: Number.isFinite(a.length_mm) ? a.length_mm : null,
+      meta: {...(a.meta ?? {})},
+      growth: growth[s.id]?.[k] ?? null,
+      serviceIndex: k
+    }));
+    const candidates = chosen.filter(c => c.path.length >= 2);
+    for (const alt of alternatives[s.id] ?? []) {
+      if (!Array.isArray(alt.path) || alt.path.length < 2) continue;
+      candidates.push({
+        path: clonePoints(alt.path),
+        score: Number.isFinite(alt.score) ? alt.score : null,
+        serviceMm: Number.isFinite(alt.length_mm) ? alt.length_mm : null,
+        meta: {hops: alt.hops ?? null},
+        growth: null,
+        alternative: true
+      });
+    }
+    const repIndex = candidates.findIndex(c => c.serviceIndex === s.representative && !c.alternative);
+    const rep = Number.isInteger(s.representative) && repIndex >= 0 ? repIndex : null;
     return {
       uid: s.id,
       name: '',

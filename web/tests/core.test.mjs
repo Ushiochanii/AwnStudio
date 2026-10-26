@@ -206,3 +206,50 @@ test('labels that would overlap are dropped, earlier ones win', async () => {
   const kept = placeLabels([rect(0, 0), rect(10, 5), rect(100, 0), rect(0, 40)]);
   assert.equal(kept.length, 3);
 });
+
+test('tile windows match the service rule', async () => {
+  const {tileWindows} = await import('../js/layers.mjs');
+  const tiles = tileWindows(3508, 2480);
+  assert.equal(tiles.length, 70);
+  assert.deepEqual(tiles[0], [0, 0, 640, 640]);
+  assert.deepEqual(tiles.at(-1), [2868, 1840, 3508, 2480]);
+});
+
+test('stages attach to candidates; alternatives are appended', () => {
+  const data = serviceResultWithStages();
+  const [s] = spikeletsFromResult(data);
+  assert.equal(s.candidates.length, 3);
+  assert.equal(s.rep, 1);
+  assert.equal(s.candidates[1].growth.hops.length, 2);
+  assert.equal(s.candidates[2].alternative, true);
+});
+
+test('inspection steps: seed, hops, measurement path', async () => {
+  const {inspectionSteps, visibleSteps, grownLength} = await import('../js/inspect.mjs');
+  const [s] = spikeletsFromResult(serviceResultWithStages());
+  const steps = inspectionSteps(s.candidates[1]);
+  assert.deepEqual(steps.map(x => x.kind), ['seed', 'hop', 'final']);
+  assert.equal(steps[1].gap, true);
+  assert.equal(visibleSteps(steps, 1).length, 2);
+  assert.equal(grownLength(steps, 2), 5);
+  assert.deepEqual(inspectionSteps(s.candidates[2]).map(x => x.kind), ['final']);
+});
+
+test('path prefix by length for the trace reveal', async () => {
+  const {pathPrefix} = await import('../js/viewer.mjs');
+  assert.deepEqual(pathPrefix([[0, 0], [10, 0], [10, 10]], 0.75), [[0, 0], [10, 0], [10, 5]]);
+  assert.deepEqual(pathPrefix([[0, 0], [10, 0]], 1), [[0, 0], [10, 0]]);
+});
+
+function serviceResultWithStages() {
+  const data = serviceResult();
+  data.spikelets = [data.spikelets[0]];
+  data.stages = {
+    growth: {S001: [
+      {p_root: 0.9, hops: [{path: [[110, 100], [110, 80]], length_mm: 2, gap: false}]},
+      {p_root: 0.8, hops: [{path: [[110, 100], [110, 60]], length_mm: 4, gap: false}, {path: [[110, 55], [111, 20]], length_mm: 1, gap: true}]}
+    ]},
+    alternatives: {S001: [{path: [[112, 100], [130, 60]], length_mm: 4.4, score: 0.3, hops: 0}]}
+  };
+  return data;
+}

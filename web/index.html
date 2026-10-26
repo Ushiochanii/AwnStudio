@@ -12,116 +12,152 @@
 <header class="topbar">
   <div class="brand"><img src="assets/icon.svg" alt="" width="22" height="22"><span>AwnStudio</span></div>
   <ol class="steps" id="steps" aria-label="Workflow">
-    <li data-step="import"><button type="button" data-i18n="step.import">Import</button></li>
-    <li data-step="calibrate"><button type="button" data-i18n="step.calibrate">Calibrate</button></li>
-    <li data-step="measure"><button type="button" data-i18n="step.measure">Measure</button></li>
-    <li data-step="review"><button type="button" data-i18n="step.review">Review</button></li>
-    <li data-step="export"><button type="button" data-i18n="step.export">Export</button></li>
+    <li data-step="import"><button type="button"><i></i><span data-i18n="step.import">Import</span></button></li>
+    <li data-step="calibrate"><button type="button"><i></i><span data-i18n="step.calibrate">Calibrate</span></button></li>
+    <li data-step="measure"><button type="button"><i></i><span data-i18n="step.measure">Measure</span></button></li>
+    <li data-step="review"><button type="button"><i></i><span data-i18n="step.review">Review</span></button></li>
+    <li data-step="export"><button type="button"><i></i><span data-i18n="step.export">Export</span></button></li>
   </ol>
   <div class="topbar-actions">
-    <span class="service" id="service-status" data-state="unknown"><i></i><span id="service-label"></span>
-      <button class="link" id="service-retry" data-i18n="service.retry" hidden>Reconnect</button></span>
+    <div class="model" id="model-box" data-state="unknown">
+      <i class="dot"></i>
+      <select id="model-select" aria-label="Model"></select>
+      <span class="model-status" id="model-status"></span>
+      <span class="mono elapsed" id="model-elapsed" hidden>0.0 s</span>
+      <button class="link" id="service-retry" data-i18n="service.retry" hidden>Reconnect</button>
+    </div>
     <span class="save-state" id="save-state"></span>
-    <button id="open-project" data-i18n="action.openProject">Open project</button>
-    <button id="save-project" data-i18n="action.saveProject">Save project</button>
+    <button class="ghost" id="open-project" data-i18n="action.openProject">Open project</button>
+    <button class="ghost" id="save-project" data-i18n="action.saveProject">Save project</button>
     <button class="primary" id="export-open" data-i18n="action.export">Export</button>
-    <button class="icon" id="help-open" data-i18n-title="help.title" title="Keyboard shortcuts (?)" aria-label="Help">?</button>
-    <button class="icon" id="settings-open" data-i18n-title="settings.title" title="Settings" aria-label="Settings">⚙</button>
+    <button class="icon ghost" id="help-open" data-i18n-title="help.title" title="Keyboard shortcuts (?)">?</button>
+    <button class="icon ghost" id="settings-open" data-i18n-title="settings.title" title="Settings" data-icon="settings"></button>
   </div>
 </header>
 
 <main class="workspace" id="workspace">
   <aside class="sidebar" id="sidebar">
     <div class="pane-head">
-      <h2><span data-i18n="images.title">Images</span> <small id="image-count">0</small></h2>
-      <button class="primary small" id="import-open" data-i18n="action.import">Import</button>
+      <h2><span data-i18n="images.title">Images</span> <small class="mono" id="image-count">0</small></h2>
+      <button class="small" id="import-open" data-icon="import"><span data-i18n="action.import">Import</span></button>
     </div>
     <div class="batch">
-      <button id="measure-pending" data-i18n="batch.run">Measure all pending</button>
-      <button id="batch-stop" data-i18n="batch.stop" hidden>Stop after current</button>
+      <button class="wide" id="measure-pending" data-i18n="batch.run">Measure all pending</button>
+      <button class="wide" id="batch-stop" data-i18n="batch.stop" hidden>Stop after current</button>
       <div class="batch-progress" id="batch-progress" hidden>
         <div class="bar"><i id="batch-bar"></i></div>
-        <span id="batch-text"></span>
+        <span class="small" id="batch-text"></span>
       </div>
     </div>
     <div class="list-tools">
-      <label><input type="checkbox" id="select-all-images"> <span data-i18n="images.selectAll">Select all</span></label>
+      <label class="check"><input type="checkbox" id="select-all-images"> <span data-i18n="images.selectAll">Select all</span></label>
       <button class="link danger" id="delete-images" data-i18n="images.deleteSelected" disabled>Delete selected</button>
     </div>
     <ul class="image-list" id="image-list"></ul>
     <button class="link sample" id="samples-open" data-i18n="samples.open">Open sample pages…</button>
   </aside>
-  <div class="resizer" data-resize="sidebar"></div>
+  <div class="resizer" data-resize="sidebar" role="separator" aria-orientation="vertical" tabindex="0"></div>
 
   <section class="stage">
     <div class="stage-head">
       <div class="page-title">
         <h1 id="page-name">—</h1>
-        <span id="page-meta" class="muted"></span>
+        <span id="page-meta" class="meta"></span>
       </div>
       <div class="page-actions">
-        <span class="calibration-chip" id="calibration-chip"></span>
+        <button class="chip mono" id="calibration-chip" data-i18n-title="cal.editRatio"></button>
         <button id="calibrate-open" data-i18n="action.calibrate">Calibrate</button>
         <button class="primary" id="measure-run" data-i18n="action.measure">Measure</button>
       </div>
     </div>
     <div class="job-strip" id="job-strip" hidden>
-      <div class="bar"><i id="job-bar"></i></div><span id="job-text"></span>
+      <span class="job-stage" id="job-text"></span>
+      <div class="bar"><i id="job-bar"></i></div>
+      <span class="mono small" id="job-tiles"></span>
       <button class="link small" id="job-cancel" data-i18n="job.cancel">Cancel</button>
     </div>
-    <div class="notice" id="stale-notice" hidden data-i18n="notice.stale">Calibration changed after measurement. Lengths use the new scale; measure again to rerun reconstruction with it.</div>
+    <div class="notice" id="stale-notice" hidden data-i18n="notice.stale">Calibration changed after measurement.</div>
 
     <div class="canvas-wrap" id="canvas-wrap" tabindex="0">
       <canvas id="canvas"></canvas>
       <div class="empty" id="empty">
-        <img src="assets/empty.svg" alt="" width="140" height="100">
+        <img src="assets/empty.svg" alt="" width="150" height="108">
         <h2 data-i18n="empty.title">Drop page images here, or import them.</h2>
         <ol class="guide">
-          <li><b data-i18n="step.import">Import</b><span data-i18n="empty.import">Scans of spikelets on 5 mm graph paper (JPEG, PNG, WebP).</span></li>
-          <li><b data-i18n="step.calibrate">Calibrate</b><span data-i18n="empty.calibrate">The grid is detected automatically; a known distance works too.</span></li>
-          <li><b data-i18n="step.measure">Measure</b><span data-i18n="empty.measure">The model finds spikelets and traces each awn.</span></li>
-          <li><b data-i18n="step.review">Review</b><span data-i18n="empty.review">Check flagged spikelets, correct paths, confirm, export.</span></li>
+          <li><b data-i18n="step.import">Import</b><span data-i18n="empty.import"></span></li>
+          <li><b data-i18n="step.calibrate">Calibrate</b><span data-i18n="empty.calibrate"></span></li>
+          <li><b data-i18n="step.measure">Measure</b><span data-i18n="empty.measure"></span></li>
+          <li><b data-i18n="step.review">Review</b><span data-i18n="empty.review"></span></li>
         </ol>
         <div class="row center">
           <button class="primary" id="empty-import" data-i18n="action.import">Import</button>
           <button id="empty-sample" data-i18n="samples.open">Open sample pages…</button>
         </div>
       </div>
+
       <div class="toolbar" id="toolbar" role="toolbar">
-        <button data-tool="select" data-i18n-title="tool.select" title="Select (V)">⬚</button>
-        <button data-tool="spikelet" data-i18n-title="tool.spikelet" title="Add spikelet (N)">⬠</button>
-        <button data-tool="awn" data-i18n-title="tool.awn" title="Redraw awn (A)">〰</button>
-        <button data-tool="ruler" data-i18n-title="tool.ruler" title="Two-point calibration (R)">📏</button>
+        <button data-tool="select" data-i18n-title="tool.select"></button>
+        <button data-tool="box" data-i18n-title="tool.box"></button>
+        <button data-tool="spikelet" data-i18n-title="tool.spikelet"></button>
+        <button data-tool="awn" data-i18n-title="tool.awn"></button>
+        <button data-tool="ruler" data-i18n-title="tool.ruler"></button>
         <span class="sep"></span>
-        <button id="undo" data-i18n-title="tool.undo" title="Undo (Ctrl+Z)">↶</button>
-        <button id="redo" data-i18n-title="tool.redo" title="Redo (Ctrl+Y)">↷</button>
+        <button id="undo" data-i18n-title="tool.undo"></button>
+        <button id="redo" data-i18n-title="tool.redo"></button>
         <span class="sep"></span>
-        <button id="fit" data-i18n-title="tool.fit" title="Fit page (0)">⤢</button>
-        <button id="focus" data-i18n-title="tool.focus" title="Zoom to selection (F)">◎</button>
-        <button id="delete-selection" data-i18n-title="tool.delete" title="Delete selection (Del)">🗑</button>
+        <button id="source-preview" data-i18n-title="tool.source" aria-pressed="false"></button>
+        <button id="background-toggle" data-i18n-title="tool.background" aria-pressed="false"></button>
+        <button id="focus" data-i18n-title="tool.focus"></button>
+        <button id="delete-selection" data-i18n-title="tool.delete"></button>
       </div>
+
+      <div class="layer-switch" id="layer-switch" role="tablist" aria-label="Display layer">
+        <span class="slider" aria-hidden="true"></span>
+        <button role="tab" data-layer-view="evidence"><span data-i18n="layer.evidence">Evidence</span> <small class="mono" id="count-evidence"></small></button>
+        <button role="tab" data-layer-view="growth"><span data-i18n="layer.growth">Growth</span> <small class="mono" id="count-growth"></small></button>
+        <button role="tab" data-layer-view="candidates"><span data-i18n="layer.candidates">Candidates</span> <small class="mono" id="count-candidates"></small></button>
+        <button role="tab" data-layer-view="edits"><span data-i18n="layer.edits">Editable</span> <small class="mono" id="count-edits"></small></button>
+      </div>
+      <div class="growth-legend" id="growth-legend" hidden>
+        <span><i style="--c:#11a3c4"></i><span data-i18n="legend.seed">Seed</span></span>
+        <span><i style="--c:#3f7bd9"></i>1</span><span><i style="--c:#7657c8"></i>2</span>
+        <span><i style="--c:#d1772f"></i>3</span><span><i style="--c:#c64e52"></i>4</span>
+        <span><i style="--c:#9b4aa6"></i>5+</span>
+        <span class="muted" data-i18n="legend.gap">dashed: gap</span>
+      </div>
+      <div class="original-badge" id="original-badge" hidden></div>
+
       <div class="layers" id="layers">
         <details>
-          <summary data-i18n="layers.title">Layers</summary>
-          <label><input type="checkbox" data-layer="photo" checked> <span data-i18n="layers.photo">Photo</span></label>
-          <label><input type="checkbox" data-layer="dim"> <span data-i18n="layers.dim">Dim photo</span></label>
-          <label><input type="checkbox" data-layer="outlines" checked> <span data-i18n="layers.outlines">Spikelet outlines</span></label>
-          <label><input type="checkbox" data-layer="candidates"> <span data-i18n="layers.candidates">Awn candidates</span></label>
-          <label><input type="checkbox" data-layer="paths" checked> <span data-i18n="layers.paths">Measurement paths</span></label>
-          <label><input type="checkbox" data-layer="labels" checked> <span data-i18n="layers.labels">IDs and lengths</span></label>
+          <summary data-i18n="layers.title">View</summary>
+          <label class="check"><input type="checkbox" data-layer="photo" checked> <span data-i18n="layers.photo">Photo</span></label>
+          <label class="check"><input type="checkbox" data-layer="dim"> <span data-i18n="layers.dim">Dim photo</span></label>
+          <label class="check"><input type="checkbox" data-layer="outlines" checked> <span data-i18n="layers.outlines">Spikelet outlines</span></label>
+          <label class="check"><input type="checkbox" data-layer="paths" checked> <span data-i18n="layers.paths">Measurement paths</span></label>
+          <label class="check"><input type="checkbox" data-layer="labels" checked> <span data-i18n="layers.labels">IDs and lengths</span></label>
           <div class="threshold">
-            <label for="threshold"><span data-i18n="layers.threshold">Score threshold</span> <output id="threshold-value"></output></label>
+            <label for="threshold"><span data-i18n="layers.threshold">Score threshold</span> <output class="mono" id="threshold-value"></output></label>
             <input type="range" id="threshold" min="0" max="1" step="0.05">
-            <p class="muted small" data-i18n="layers.thresholdHelp">Candidates below the threshold are hidden; representatives below it need review.</p>
+            <p class="muted small" data-i18n="layers.thresholdHelp"></p>
           </div>
         </details>
       </div>
+
+      <button class="floating-confirm" id="floating-confirm" hidden></button>
+      <div class="candidate-nav" id="candidate-nav" hidden>
+        <button id="cand-prev" aria-label="Previous candidate">‹</button>
+        <span class="mono" id="cand-pos"></span>
+        <button id="cand-next" aria-label="Next candidate">›</button>
+        <button id="cand-use" class="star" data-i18n-title="detail.useCandidate">☆</button>
+      </div>
+
       <div class="zoom-controls" id="zoom-controls">
-        <button id="zoom-out" aria-label="Zoom out" data-i18n-title="tool.zoomOut">−</button>
-        <button id="zoom-level" class="zoom-level" data-i18n-title="tool.fit">100%</button>
-        <button id="zoom-in" aria-label="Zoom in" data-i18n-title="tool.zoomIn">+</button>
+        <button id="zoom-out" data-i18n-title="tool.zoomOut">−</button>
+        <button id="zoom-level" class="zoom-level mono" data-i18n-title="tool.fit">100%</button>
+        <button id="zoom-in" data-i18n-title="tool.zoomIn">+</button>
       </div>
       <canvas class="minimap" id="minimap" width="180" height="128" aria-hidden="true"></canvas>
+      <p class="layer-note" id="layer-note"></p>
       <div class="draw-bar" id="draw-bar" hidden>
         <span id="draw-text"></span>
         <button class="primary small" id="draw-finish" data-i18n="draw.finish">Finish</button>
@@ -132,23 +168,24 @@
       <span id="hint"></span>
       <span class="spacer"></span>
       <span id="hover-info"></span>
-      <span id="cursor"></span>
+      <span class="mono" id="cursor"></span>
     </footer>
   </section>
 
-  <div class="resizer" data-resize="panel"></div>
+  <div class="resizer" data-resize="panel" role="separator" aria-orientation="vertical" tabindex="0"></div>
   <aside class="panel" id="panel">
-    <div class="tabs" role="tablist">
-      <button role="tab" data-tab="results" aria-selected="true" data-i18n="tab.results">Results</button>
-      <button role="tab" data-tab="inspect" aria-selected="false" data-i18n="tab.inspect">Inspect</button>
+    <div class="mode-switch" role="tablist">
+      <span class="slider" aria-hidden="true"></span>
+      <button role="tab" data-mode="measure" data-i18n="mode.measure">Measure</button>
+      <button role="tab" data-mode="inspect" data-i18n="mode.inspect">Inspect</button>
     </div>
 
-    <section class="tab-body" data-body="results">
+    <section class="tab-body" data-body="measure">
       <div class="stats" id="stats">
         <div class="stat-row" id="summary"></div>
-        <div class="progress" id="review-progress" title=""><i></i></div>
-        <svg class="histogram" id="histogram" viewBox="0 0 300 70" preserveAspectRatio="none" role="img"></svg>
-        <div class="hist-axis muted small" id="hist-axis"></div>
+        <div class="progress" id="review-progress"></div>
+        <svg class="histogram" id="histogram" viewBox="0 0 300 64" preserveAspectRatio="none" role="img"></svg>
+        <div class="hist-axis mono small" id="hist-axis"></div>
       </div>
       <div class="filters" id="filters">
         <button data-filter="all" data-i18n="filter.all">All</button>
@@ -158,7 +195,7 @@
         <button data-filter="confirmed" data-i18n="filter.confirmed">Confirmed</button>
       </div>
       <div class="table-tools">
-        <input type="search" id="search" data-i18n-placeholder="results.search" placeholder="Search ID">
+        <input type="search" id="search" data-i18n-placeholder="results.search">
         <button class="small" id="confirm-visible" data-i18n="results.confirmVisible">Confirm shown</button>
       </div>
       <div class="table-scroll">
@@ -171,44 +208,57 @@
           </tr></thead>
           <tbody id="rows"></tbody>
         </table>
-        <p class="muted center" id="no-rows" hidden data-i18n="results.none">No spikelets match.</p>
+        <p class="muted center" id="no-rows" hidden data-i18n="results.none"></p>
       </div>
 
       <div class="detail" id="detail" hidden>
         <div class="detail-head">
           <label class="id-field"><span data-i18n="detail.id">ID</span><input id="detail-name" maxlength="80"></label>
-          <div class="big-length"><output id="detail-length">—</output><small>mm</small></div>
+          <div class="big-length"><output class="mono" id="detail-length">—</output><small>mm</small></div>
         </div>
         <div class="status-line"><span class="badge" id="detail-status"></span><span id="detail-origin" class="muted small"></span></div>
         <ul class="reasons" id="detail-reasons"></ul>
-        <div class="candidates" id="candidate-nav">
-          <button class="small" id="cand-prev" aria-label="Previous candidate">‹</button>
-          <span id="cand-pos"></span>
-          <button class="small" id="cand-next" aria-label="Next candidate">›</button>
-          <button class="small" id="cand-use" data-i18n="detail.useCandidate">Use as representative</button>
-        </div>
         <div class="detail-actions">
           <button class="primary" id="detail-confirm" data-i18n="detail.confirm">Confirm</button>
           <button id="detail-redraw" data-i18n="detail.redraw">Redraw awn</button>
           <button id="detail-reset" data-i18n="detail.reset">Restore automatic</button>
-          <button class="danger" id="detail-delete" data-i18n="detail.delete">Delete</button>
+          <button class="ghost danger" id="detail-delete-awn" data-i18n="detail.deleteAwn">Delete awn</button>
+          <button class="ghost danger" id="detail-delete" data-i18n="detail.delete">Delete spikelet</button>
         </div>
-        <p class="muted small" data-i18n="detail.help">Drag a vertex to move it, double-click a path to insert one, right-click a vertex to remove it.</p>
+        <p class="muted small" data-i18n="detail.help"></p>
       </div>
     </section>
 
     <section class="tab-body" data-body="inspect" hidden>
-      <p class="muted" id="inspect-empty" data-i18n="inspect.empty">Select a spikelet to see how its awn was reconstructed.</p>
-      <div id="inspect" hidden>
-        <h3 id="inspect-title"></h3>
-        <dl class="facts" id="inspect-facts"></dl>
+      <p class="muted" id="inspect-empty" data-i18n="inspect.empty"></p>
+      <div class="inspect" id="inspect" hidden>
+        <div class="inspect-head">
+          <h3 id="inspect-title"></h3>
+          <span class="stage-badge" id="inspect-stage-badge"></span>
+        </div>
+        <dl class="kv" id="inspect-summary"></dl>
+        <div class="stepper">
+          <button class="small" id="inspect-back" aria-label="Previous step">‹</button>
+          <input type="range" id="inspect-slider" min="0" max="0" step="1">
+          <button class="small" id="inspect-forward" aria-label="Next step">›</button>
+        </div>
+        <p class="step-label" id="inspect-step-label"></p>
+        <dl class="kv" id="inspect-step-detail"></dl>
+        <label class="check"><input type="checkbox" id="inspect-pool"> <span data-i18n="inspect.pool">Show other candidates</span></label>
+        <button class="small" id="inspect-focus" data-i18n="tool.focus">Zoom to selection</button>
         <h4 data-i18n="inspect.candidates">Awn candidates</h4>
         <table class="results compact">
           <thead><tr><th>#</th><th class="num" data-i18n="col.length">Awn (mm)</th><th class="num" data-i18n="inspect.score">Score</th><th class="num" data-i18n="inspect.hops">Hops</th><th class="num" data-i18n="inspect.gaps">Gaps</th></tr></thead>
           <tbody id="inspect-candidates"></tbody>
         </table>
+      </div>
+      <div class="run-info" id="run-info">
         <h4 data-i18n="inspect.run">Run</h4>
-        <dl class="facts" id="inspect-run"></dl>
+        <dl class="kv" id="inspect-run"></dl>
+        <div class="timing" id="timing-panel" hidden>
+          <h4 data-i18n="timing.title">Stage timings</h4>
+          <div id="timing-bars"></div>
+        </div>
       </div>
     </section>
   </aside>
@@ -217,12 +267,11 @@
 <dialog id="import-dialog">
   <form method="dialog">
     <h2 data-i18n="import.title">Import images</h2>
-    <div class="dropzone" id="dropzone"><p data-i18n="import.drop">Drop JPEG, PNG or WebP files here</p></div>
+    <div class="dropzone" id="dropzone" tabindex="0" role="button"><p data-i18n="import.drop"></p></div>
     <div class="row">
       <button type="button" class="primary" id="choose-files" data-i18n="import.files">Choose files</button>
       <button type="button" id="choose-folder" data-i18n="import.folder">Choose folder</button>
     </div>
-    <label class="check"><input type="checkbox" id="import-autocal"> <span data-i18n="settings.autoCalibrate">Detect the graph-paper grid after import</span></label>
     <menu><button value="close" data-i18n="action.close">Close</button></menu>
   </form>
 </dialog>
@@ -231,32 +280,34 @@
   <form method="dialog" id="calibration-form">
     <h2 data-i18n="cal.title">Calibration</h2>
     <p class="muted" id="cal-current"></p>
-    <fieldset>
-      <legend data-i18n="cal.grid">Graph-paper grid (5 mm)</legend>
-      <p class="muted small" data-i18n="cal.gridHelp">Detects the grid lines behind the page and measures x and y separately.</p>
-      <button type="button" id="cal-grid" data-i18n="cal.detect">Detect grid</button>
-      <span id="cal-grid-result" class="small"></span>
-    </fieldset>
-    <fieldset>
-      <legend data-i18n="cal.twoPoint">Known distance</legend>
+    <div class="segmented" role="radiogroup">
+      <label><input type="radio" name="cal-mode" value="grid" checked> <span data-i18n="cal.grid">Graph-paper grid</span></label>
+      <label><input type="radio" name="cal-mode" value="line"> <span data-i18n="cal.twoPoint">Known distance</span></label>
+      <label><input type="radio" name="cal-mode" value="ratio"> <span data-i18n="cal.ratio">Direct scale</span></label>
+    </div>
+    <section data-cal="grid">
+      <p class="muted small" data-i18n="cal.gridHelp"></p>
+      <div class="row"><button type="button" id="cal-grid" data-i18n="cal.detect">Detect grid</button></div>
+      <p class="small mono" id="cal-grid-result"></p>
+    </section>
+    <section data-cal="line" hidden>
       <div class="row">
         <button type="button" id="cal-draw" data-i18n="cal.draw">Draw on image</button>
-        <span id="cal-pixels" class="muted small"></span>
+        <span id="cal-pixels" class="muted small mono"></span>
       </div>
       <div class="row">
         <label><span data-i18n="cal.distance">Distance</span> <input type="number" id="cal-mm" min="0" step="any"></label>
         <select id="cal-unit"><option value="1">mm</option><option value="10">cm</option><option value="0.001">µm</option></select>
-        <button type="button" id="cal-apply-two" data-i18n="cal.apply">Apply</button>
+        <button type="button" class="primary" id="cal-apply-two" data-i18n="cal.apply">Apply</button>
       </div>
-    </fieldset>
-    <fieldset>
-      <legend data-i18n="cal.ratio">Direct scale</legend>
+    </section>
+    <section data-cal="ratio" hidden>
       <div class="row">
         <label><input type="number" id="cal-ratio" min="0" step="any"> mm/px</label>
-        <button type="button" id="cal-apply-ratio" data-i18n="cal.apply">Apply</button>
+        <button type="button" class="primary" id="cal-apply-ratio" data-i18n="cal.apply">Apply</button>
       </div>
-    </fieldset>
-    <label class="check"><input type="checkbox" id="cal-propagate"> <span data-i18n="cal.propagate">Also apply to uncalibrated images with the same pixel size</span></label>
+    </section>
+    <label class="check"><input type="checkbox" id="cal-propagate"> <span data-i18n="cal.propagate"></span></label>
     <p class="error" id="cal-error"></p>
     <menu><button value="close" data-i18n="action.close">Close</button></menu>
   </form>
@@ -267,42 +318,98 @@
     <h2 data-i18n="export.title">Export</h2>
     <p class="muted" id="export-summary"></p>
     <div class="export-options">
-      <button type="button" id="export-current"><strong data-i18n="export.current">This image (CSV)</strong><small data-i18n="export.currentHelp">ID and awn length in mm</small></button>
-      <button type="button" id="export-all"><strong data-i18n="export.all">All images (ZIP of CSV)</strong><small data-i18n="export.allHelp">One CSV per measured image</small></button>
-      <button type="button" id="export-detailed"><strong data-i18n="export.detailed">Detailed project CSV</strong><small data-i18n="export.detailedHelp">Automatic and final length, review state, score, calibration</small></button>
-      <button type="button" id="export-stats"><strong data-i18n="export.stats">Summary per image (CSV)</strong><small data-i18n="export.statsHelp">n, mean, SD, median, min and max awn length</small></button>
+      <button type="button" id="export-current"><strong data-i18n="export.current"></strong><small data-i18n="export.currentHelp"></small></button>
+      <button type="button" id="export-all"><strong data-i18n="export.all"></strong><small data-i18n="export.allHelp"></small></button>
+      <button type="button" id="export-detailed"><strong data-i18n="export.detailed"></strong><small data-i18n="export.detailedHelp"></small></button>
+      <button type="button" id="export-stats"><strong data-i18n="export.stats"></strong><small data-i18n="export.statsHelp"></small></button>
     </div>
     <menu><button value="close" data-i18n="action.close">Close</button></menu>
+  </form>
+</dialog>
+
+<dialog id="download-dialog" class="wide">
+  <form method="dialog">
+    <h2 data-i18n="download.title">Download ready</h2>
+    <p><strong class="mono" id="download-name"></strong> <span class="muted small" id="download-size"></span></p>
+    <textarea id="download-text" class="mono" readonly hidden></textarea>
+    <menu>
+      <button value="close" data-i18n="action.close">Close</button>
+      <a class="button primary" id="download-link" data-i18n="download.save">Save file</a>
+    </menu>
   </form>
 </dialog>
 
 <dialog id="samples-dialog">
   <form method="dialog">
     <h2 data-i18n="samples.title">Sample pages</h2>
-    <p class="muted" data-i18n="samples.help">Pages from the development set with their cached automatic results.</p>
+    <p class="muted" data-i18n="samples.help"></p>
     <ul class="sample-list" id="sample-list"></ul>
     <menu><button value="close" data-i18n="action.close">Close</button></menu>
   </form>
 </dialog>
 
-<dialog id="settings-dialog">
+<dialog id="settings-dialog" class="wide">
   <form method="dialog" id="settings-form">
     <h2 data-i18n="settings.title">Settings</h2>
-    <label class="field"><span data-i18n="settings.language">Language</span>
-      <select name="language"><option value="en">English</option><option value="zh">简体中文</option><option value="ja">日本語</option></select></label>
-    <label class="field"><span data-i18n="settings.theme">Theme</span>
-      <select name="theme"><option value="system" data-i18n="settings.themeSystem">System</option><option value="light" data-i18n="settings.themeLight">Light</option><option value="dark" data-i18n="settings.themeDark">Dark</option></select></label>
-    <label class="field"><span data-i18n="settings.threshold">Default score threshold</span><input type="number" name="threshold" min="0" max="1" step="0.05"></label>
-    <label class="check"><input type="checkbox" name="autoCalibrate"> <span data-i18n="settings.autoCalibrate">Detect the graph-paper grid after import</span></label>
-    <label class="check"><input type="checkbox" name="measureAfterImport"> <span data-i18n="settings.measureAfterImport">Measure automatically after import</span></label>
-    <label class="check"><input type="checkbox" name="confirmReplace"> <span data-i18n="settings.confirmReplace">Ask before a new measurement replaces reviewed results</span></label>
-    <label class="check"><input type="checkbox" name="autoAdvance"> <span data-i18n="settings.autoAdvance">Select the next unconfirmed spikelet after confirming</span></label>
-    <label class="check"><input type="checkbox" name="restore"> <span data-i18n="settings.restore">Restore the autosaved project on start</span></label>
-    <label class="field"><span data-i18n="settings.service">Service address</span><input name="serviceBase" placeholder="(same origin)"></label>
-    <menu>
-      <button type="button" class="danger link" id="clear-workspace" data-i18n="settings.clear">Clear workspace</button>
-      <button value="close" data-i18n="action.close">Close</button>
-    </menu>
+    <div class="settings">
+      <nav class="settings-nav">
+        <button type="button" data-section="input" data-i18n="settings.input">Input</button>
+        <button type="button" data-section="inference" data-i18n="settings.inference">Measurement</button>
+        <button type="button" data-section="display" data-i18n="settings.display">Display</button>
+        <button type="button" data-section="editing" data-i18n="settings.editing">Editing</button>
+        <button type="button" data-section="storage" data-i18n="settings.storage">Storage</button>
+        <button type="button" data-section="general" data-i18n="settings.general">General</button>
+      </nav>
+      <div class="settings-body">
+        <section data-panel="input">
+          <label class="check"><input type="checkbox" name="autoResolution"> <span data-i18n="settings.autoResolution"></span></label>
+          <label class="check"><input type="checkbox" name="autoCalibrate"> <span data-i18n="settings.autoCalibrate"></span></label>
+          <label class="check"><input type="checkbox" name="openCalibrationAfterImport"> <span data-i18n="settings.openCalibration"></span></label>
+        </section>
+        <section data-panel="inference" hidden>
+          <label class="check"><input type="checkbox" name="measureAfterImport"> <span data-i18n="settings.measureAfterImport"></span></label>
+          <label class="check"><input type="checkbox" name="runAfterCalibration"> <span data-i18n="settings.runAfterCalibration"></span></label>
+          <label class="check"><input type="checkbox" name="continueBatchAfterError"> <span data-i18n="settings.continueBatch"></span></label>
+          <label class="check"><input type="checkbox" name="livePreview"> <span data-i18n="settings.livePreview"></span></label>
+          <label class="check"><input type="checkbox" name="completionAnimation"> <span data-i18n="settings.completionAnimation"></span></label>
+          <label class="check"><input type="checkbox" name="confirmReplace"> <span data-i18n="settings.confirmReplace"></span></label>
+        </section>
+        <section data-panel="display" hidden>
+          <label class="field"><span data-i18n="settings.defaultLayer"></span>
+            <select name="defaultLayer">
+              <option value="edits" data-i18n="layer.edits">Editable</option>
+              <option value="candidates" data-i18n="layer.candidates">Candidates</option>
+              <option value="growth" data-i18n="layer.growth">Growth</option>
+              <option value="evidence" data-i18n="layer.evidence">Evidence</option>
+            </select></label>
+          <label class="field"><span data-i18n="settings.defaultMode"></span>
+            <select name="defaultMode"><option value="measure" data-i18n="mode.measure">Measure</option><option value="inspect" data-i18n="mode.inspect">Inspect</option></select></label>
+          <label class="field"><span data-i18n="settings.threshold"></span><input type="number" name="threshold" min="0" max="1" step="0.05"></label>
+          <label class="check"><input type="checkbox" name="showPool"> <span data-i18n="settings.showPool"></span></label>
+          <label class="check"><input type="checkbox" name="spikeletContext"> <span data-i18n="settings.spikeletContext"></span></label>
+          <label class="check"><input type="checkbox" name="autoFocus"> <span data-i18n="settings.autoFocus"></span></label>
+        </section>
+        <section data-panel="editing" hidden>
+          <label class="check"><input type="checkbox" name="autoAdvance"> <span data-i18n="settings.autoAdvance"></span></label>
+          <label class="check"><input type="checkbox" name="confirmDestructive"> <span data-i18n="settings.confirmDestructive"></span></label>
+          <label class="check"><input type="checkbox" name="rememberLayout"> <span data-i18n="settings.rememberLayout"></span></label>
+        </section>
+        <section data-panel="storage" hidden>
+          <label class="check"><input type="checkbox" name="restore"> <span data-i18n="settings.restore"></span></label>
+          <label class="check"><input type="checkbox" name="confirmProjectReplace"> <span data-i18n="settings.confirmProjectReplace"></span></label>
+          <button type="button" class="ghost danger" id="clear-workspace" data-i18n="settings.clear">Clear workspace</button>
+        </section>
+        <section data-panel="general" hidden>
+          <label class="field"><span data-i18n="settings.language"></span>
+            <select name="language"><option value="en">English</option><option value="zh">简体中文</option><option value="ja">日本語</option></select></label>
+          <label class="field"><span data-i18n="settings.theme"></span>
+            <select name="theme"><option value="system" data-i18n="settings.themeSystem">System</option><option value="light" data-i18n="settings.themeLight">Light</option><option value="dark" data-i18n="settings.themeDark">Dark</option></select></label>
+          <label class="check"><input type="checkbox" name="showDiagnostics"> <span data-i18n="settings.showDiagnostics"></span></label>
+          <label class="field"><span data-i18n="settings.service"></span><input name="serviceBase" placeholder="(same origin)"></label>
+        </section>
+      </div>
+    </div>
+    <menu><button value="close" data-i18n="action.close">Close</button></menu>
   </form>
 </dialog>
 
@@ -310,8 +417,16 @@
   <form method="dialog">
     <h2 data-i18n="help.title">Keyboard shortcuts</h2>
     <div class="shortcuts" id="shortcut-list"></div>
-    <p class="muted small" data-i18n="help.mouse">Wheel zooms, dragging empty space pans, Shift-drag selects several spikelets, Ctrl-click adds to the selection.</p>
+    <p class="muted small" data-i18n="help.mouse"></p>
     <menu><button value="close" data-i18n="action.close">Close</button></menu>
+  </form>
+</dialog>
+
+<dialog id="resolution-dialog">
+  <form method="dialog">
+    <h2 data-i18n="resolution.title">Image resolution is too low for reliable measurement.</h2>
+    <p class="muted" id="resolution-text" data-i18n="resolution.text"></p>
+    <menu><button value="cancel" data-i18n="action.cancel">Cancel</button><button value="ok" class="primary" data-i18n="resolution.continue">Upscale and continue</button></menu>
   </form>
 </dialog>
 

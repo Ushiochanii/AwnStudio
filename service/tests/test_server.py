@@ -104,3 +104,31 @@ class ServiceTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ResolutionTest(unittest.TestCase):
+    def grid(self, period: float, width: int = 3508, height: int = 2480):
+        import cv2
+        import numpy as np
+
+        image = np.full((height, width, 3), 255, np.uint8)
+        for x in np.arange(0, width, period):
+            cv2.line(image, (int(round(x)), 0), (int(round(x)), height - 1), (200, 160, 60), 2)
+        for y in np.arange(0, height, period):
+            cv2.line(image, (0, int(round(y))), (width - 1, int(round(y))), (200, 160, 60), 2)
+        return image
+
+    def test_reference_scale_passes(self):
+        result = server.assess_resolution(self.grid(59.0))
+        self.assertIn(result["status"], ("sufficient", "unassessed"))
+        self.assertEqual(result["scale_factor"], 1.0)
+
+    def test_resample_png(self):
+        import cv2
+        import numpy as np
+
+        data = server.resample_png(self.grid(59.0, 400, 300), 0.5)
+        image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+        self.assertEqual(image.shape[:2], (150, 200))
+        with self.assertRaises(ValueError):
+            server.resample_png(self.grid(59.0, 40, 30), 100)

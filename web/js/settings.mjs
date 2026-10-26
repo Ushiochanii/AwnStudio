@@ -1,22 +1,51 @@
 // Persisted preferences (localStorage). Unknown or malformed values fall back to defaults.
 
+import {LAYERS} from './layers.mjs';
 import {DEFAULT_SCORE_THRESHOLD} from './review.mjs';
 
 const KEY = 'awnstudio.settings';
 
 export const DEFAULTS = Object.freeze({
+  // input
+  autoResolution: true,
+  autoCalibrate: true,
+  openCalibrationAfterImport: false,
+  // measurement
+  measureAfterImport: false,
+  runAfterCalibration: false,
+  continueBatchAfterError: true,
+  livePreview: true,
+  completionAnimation: true,
+  confirmReplace: true,
+  // display
+  defaultLayer: 'edits',
+  defaultMode: 'measure',
+  threshold: DEFAULT_SCORE_THRESHOLD,
+  showPool: false,
+  spikeletContext: true,
+  autoFocus: true,
+  // editing
+  autoAdvance: true,
+  confirmDestructive: false,
+  rememberLayout: true,
+  // storage
+  restore: true,
+  confirmProjectReplace: true,
+  // general
   language: 'en',
   theme: 'system',
-  threshold: DEFAULT_SCORE_THRESHOLD,
-  autoCalibrate: true,
-  measureAfterImport: false,
-  confirmReplace: true,
-  autoAdvance: true,
-  restore: true,
+  showDiagnostics: true,
   serviceBase: '',
-  layers: {photo: true, dim: false, outlines: true, candidates: false, paths: true, labels: true},
-  layout: {sidebar: 250, panel: 340}
+  layers: {photo: true, dim: false, outlines: true, paths: true, labels: true},
+  layout: {sidebar: 248, panel: 340}
 });
+
+const CHOICES = {
+  language: ['en', 'zh', 'ja'],
+  theme: ['system', 'light', 'dark'],
+  defaultLayer: LAYERS,
+  defaultMode: ['measure', 'inspect']
+};
 
 export function normalizeSettings(raw, defaults = DEFAULTS) {
   const out = structuredClone(defaults);
@@ -27,9 +56,10 @@ export function normalizeSettings(raw, defaults = DEFAULTS) {
     if (value && typeof value === 'object') out[key] = normalizeSettings(given, value);
     else if (typeof given === typeof value) out[key] = given;
   }
-  if (!['en', 'zh', 'ja'].includes(out.language)) out.language = defaults.language;
-  if (!['system', 'light', 'dark'].includes(out.theme)) out.theme = defaults.theme;
-  if (!(out.threshold >= 0 && out.threshold <= 1)) out.threshold = defaults.threshold;
+  for (const [key, allowed] of Object.entries(CHOICES)) {
+    if (key in out && !allowed.includes(out[key])) out[key] = defaults[key];
+  }
+  if ('threshold' in out && !(out.threshold >= 0 && out.threshold <= 1)) out.threshold = defaults.threshold;
   return out;
 }
 

@@ -45,4 +45,18 @@ export const FILTERS = Object.freeze({
   missing: status => status === STATUS.missing
 });
 
+// How urgently a spikelet that needs review should be looked at: reasons are
+// weighted, several reasons add up. Used to order the "Needs review" list.
+const REASON_WEIGHT = {gap_bridged: 3, low_score: 2.5, long_chain: 1.5, weak_spikelet: 2, calibration_qc: 1};
+
+export function reviewSeverity(spikelet, options) {
+  const reasons = reviewReasons(spikelet, options);
+  if (!reasons.length) return {score: 0, level: 0};
+  let score = reasons.reduce((sum, r) => sum + (REASON_WEIGHT[r] ?? 1), 0) + (reasons.length - 1) * 0.75;
+  const rep = representative(spikelet);
+  if (rep?.score !== null && rep?.score !== undefined && rep.score < 0.2) score += 1;
+  if (rep?.meta?.gaps >= 2) score += 1;
+  return {score, level: score >= 5 ? 3 : score >= 3 ? 2 : 1};
+}
+
 export const canConfirm = spikelet => Array.isArray(spikelet.line) && spikelet.line.length >= 2;
