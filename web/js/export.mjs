@@ -3,6 +3,7 @@
 import {lengthMm} from './calibration.mjs';
 import {representative} from './result.mjs';
 import {reviewReasons, reviewStatus} from './review.mjs';
+import {summarize} from './stats.mjs';
 
 // Cells that a spreadsheet would evaluate as a formula are prefixed with '.
 const safe = value => {
@@ -138,4 +139,17 @@ export function zip(files) {
     at += part.length;
   }
   return out;
+}
+
+export const SUMMARY_HEADER = ['Image', 'Spikelets', 'Measured', 'Confirmed', 'Mean (mm)', 'SD (mm)', 'Median (mm)', 'Min (mm)', 'Max (mm)'];
+
+// One row per image with descriptive statistics of the final awn lengths.
+export function summaryCsv(pages, options = {}) {
+  const lines = [row(SUMMARY_HEADER)];
+  for (const page of exportablePages(pages)) {
+    const stats = summarize(page.spikelets.map(s => lengthMm(s.line, page.calibration)).filter(v => v !== null));
+    const confirmed = page.spikelets.filter(s => reviewStatus(s, {...options, calibration: page.calibration}) === 'confirmed').length;
+    lines.push(row([page.name, page.spikelets.length, stats.n, confirmed, mm(stats.mean), mm(stats.sd), mm(stats.median), mm(stats.min), mm(stats.max)]));
+  }
+  return BOM + lines.join('\r\n');
 }

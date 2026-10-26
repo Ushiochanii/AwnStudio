@@ -30,13 +30,17 @@ browser queues batch work and can stop after the current image.
   the image, or a direct mm/px value; optionally copy it to uncalibrated images of
   the same pixel size. Changing the scale re-computes lengths immediately and flags
   that the reconstruction itself used the old scale.
-- **Measure** one image or all pending images. Lengths in the browser are computed
+- **Measure** one image or all pending images, with progress, an estimate of the
+  remaining batch time, and cancellation of the running job. Lengths in the browser are computed
   exactly as the service does (Douglas-Peucker at 1 px, then the calibrated arc
   length), so the numbers agree with `PageResult.length_mm`.
-- **Review**: layers (photo, outlines, awn candidates, measurement paths, labels),
-  a score threshold that hides weak candidates and flags weak representatives,
-  status filters, search, per-spikelet review reasons, confirmation, keyboard
-  navigation.
+- **Review**: layers (photo, outlines, awn candidates, measurement paths, labels
+  that never overlap), a score threshold that hides weak candidates and flags weak
+  representatives, status filters, search, a sortable table (ID, length, score,
+  status), per-spikelet review reasons, confirmation, keyboard navigation. Hovering
+  a row highlights the spikelet and vice versa; a minimap appears when zoomed in.
+- **Statistics**: n, mean ± SD and median of the current image, a review progress
+  bar, and a length histogram whose bars filter the table to that length range.
 - **Inspect** the selected spikelet: its awn candidates with score, root and trace
   probability, hops and gaps; choose another candidate as the representative.
 - **Edit**: move / insert / remove vertices of the awn path and the outline, redraw
@@ -48,8 +52,10 @@ browser queues batch work and can stop after the current image.
   restores it.
 - **Export**: CSV per image (`ID, Awn length (mm)`), a ZIP of all images, or a
   detailed project CSV with automatic and final length, review state, score and
-  calibration.
-- English, 简体中文 and 日本語 (partial, falls back to English); light and dark themes.
+  calibration; or a summary CSV with n, mean, SD, median, min and max per image.
+- Deleting spikelets or replacing a measurement can be undone from the
+  notification; every action is on the undo stack. Press `?` for all shortcuts.
+- English, 简体中文 and 日本語; light and dark themes.
 
 ## Keyboard
 
@@ -80,7 +86,8 @@ browser queues batch work and can stop after the current image.
 | `js/export.mjs` | CSV and ZIP |
 | `js/api.mjs` | service client |
 | `js/viewer.mjs` | canvas drawing and pointer interaction |
-| `js/i18n.mjs`, `js/settings.mjs`, `js/icons.mjs` | copy, preferences, icons |
+| `js/stats.mjs` | summary statistics and histogram bins |
+| `js/i18n.mjs`, `js/settings.mjs`, `js/icons.mjs`, `js/shortcuts.mjs` | copy, preferences, icons, shortcut list |
 | `js/app.mjs` | wiring |
 
 ## Tests
@@ -88,4 +95,5 @@ browser queues batch work and can stop after the current image.
 ```bash
 node --test web/tests/
 AWNSTUDIO_SAMPLE=runs/results/pfg/IMG_9687.json node --test web/tests/   # also checks a real result
+PYTHONPATH=src python -m unittest discover -s service/tests             # service, no model needed
 ```

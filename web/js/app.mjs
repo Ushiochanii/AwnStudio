@@ -3,7 +3,7 @@
 import {createApi} from './api.mjs';
 import * as cal from './calibration.mjs';
 import * as edits from './edits.mjs';
-import {csvName, detailedCsv, exportablePages, simpleCsv, zip} from './export.mjs';
+import {csvName, detailedCsv, exportablePages, simpleCsv, summaryCsv, zip} from './export.mjs';
 import {bounds, distance, polygonArea, unionBounds} from './geometry.mjs';
 import {createHistory} from './history.mjs';
 import {applyTranslations, guessLocale, setLocale, t} from './i18n.mjs';
@@ -12,6 +12,8 @@ import {blobToDataUrl, buildProject, dataUrlToBlob, parseProject, serializePage}
 import {calibrationFromResult, newManualSpikelet, representative, runInfo, spikeletsFromResult, validName} from './result.mjs';
 import {canConfirm, FILTERS, reviewReasons, reviewStatus, STATUS} from './review.mjs';
 import {loadSettings, saveSettings} from './settings.mjs';
+import {SHORTCUTS} from './shortcuts.mjs';
+import {histogram, summarize} from './stats.mjs';
 import * as store from './store.mjs';
 import {createViewer} from './viewer.mjs';
 
@@ -30,6 +32,10 @@ const state = {
   threshold: settings.threshold,
   filter: 'all',
   search: '',
+  sort: {key: 'name', dir: 'asc'},
+  lengthRange: null, // [min, max) from a histogram bin
+  rowHover: null,
+  restored: false,
   tab: 'results',
   candidateCursor: new Map(),
   checkedPages: new Set(),
@@ -58,14 +64,26 @@ const MIN_SPIKELET_AREA_PX = 25;
 const byName = new Intl.Collator(undefined, {numeric: true});
 const uid = () => (crypto.randomUUID?.() ?? Date.now().toString(36) + Math.random().toString(36).slice(2));
 
-function toast(message, kind = 'info') {
+function toast(message, kind = 'info', action = null) {
   const el = $('#toast');
-  el.textContent = message;
+  $('#toast-text').textContent = message;
+  const button = $('#toast-action');
+  button.hidden = !action;
+  button.onclick = null;
+  if (action) {
+    button.textContent = action.label;
+    button.onclick = () => {
+      el.classList.remove('show');
+      action.run();
+    };
+  }
   el.dataset.kind = kind;
   el.classList.add('show');
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => el.classList.remove('show'), kind === 'error' ? 6000 : 2800);
+  toast.timer = setTimeout(() => el.classList.remove('show'), action ? 7000 : kind === 'error' ? 6000 : 2800);
 }
+
+const undoAction = () => ({label: t('action.undo'), run: undo});
 
 function ask(text) {
   const dialog = $('#confirm-dialog');
@@ -102,9 +120,10 @@ function changed(page, {ui = true} = {}) {
 
 let saveState = null;
 const renderSaveState = () => { $('#save-state').textContent = saveState ? t(`save.${saveState}`) : ''; };
-autosave.onState(kind => {
+autosave.onState((kind, error) => {
   saveState = kind;
   renderSaveState();
+  if (kind === 'error') toast(t('save.errorDetail', {error: error?.message ?? ''}), 'error');
 });
 
 async function makeRuntimePage(data) {
@@ -157,10 +176,17 @@ async function restore() {
   if (!settings.restore) return;
   try {
     const rows = (await store.loadPages()).sort((a, b) => a.order - b.order);
-    for (const row of rows) state.pages.push(await makeRuntimePage(row));
-    if (state.pages.length) openPage(state.pages[0].id);
+    const restored = [];
+    for (const row of rows) if (!state.pages.some(p => p.id === row.id)) restored.push(await makeRuntimePage(row));
+    // Pages imported while the autosave was loading stay after the restored ones.
+    state.pages = [...restored, ...state.pages];
+    if (!current() && state.pages.length) openPage(state.pages[0].id);
+    else renderAll();
   } catch (error) {
     console.warn('restore failed', error);
+    toast(t('save.restoreFailed'), 'error');
+  } finally {
+    state.restored = true;
   }
 }
 
@@ -216,6 +242,7 @@ function openPage(id) {
   state.primaryUid = null;
   state.draft = null;
   state.rulerLine = null;
+  state.lengthRange = null;
   setTool('select');
   const page = current();
   if (page) loadImage(page);
@@ -288,9 +315,34 @@ function visibleSpikelets(page = current()) {
   if (!page) return [];
   const test = FILTERS[state.filter] ?? FILTERS.all;
   const query = state.search.trim().toLowerCase();
-  return page.spikelets
-    .filter(s => test(statusOf(s, page)) && (!query || s.name.toLowerCase().includes(query)))
-    .sort((a, b) => byName.compare(a.name, b.name));
+  const range = state.lengthRange;
+  const inRange = s => {
+    if (!range) return true;
+    const length = lengthOf(s, page);
+    return length !== null && length >= range[0] && length < range[1];
+  };
+  const list = page.spikelets.filter(s => test(statusOf(s, page)) && inRange(s) && (!query || s.name.toLowerCase().includes(query)));
+  return sortSpikelets(list, page);
+}
+
+const STATUS_ORDER = [STATUS.missing, STATUS.needsReview, STATUS.modified, STATUS.automatic, STATUS.confirmed];
+
+function sortSpikelets(list, page) {
+  const {key, dir} = state.sort;
+  const value = {
+    name: s => s.name,
+    length: s => lengthOf(s, page),
+    score: s => representative(s)?.score ?? null,
+    status: s => STATUS_ORDER.indexOf(statusOf(s, page))
+  }[key];
+  const sign = dir === 'asc' ? 1 : -1;
+  return list.map(s => ({s, v: value(s)})).sort((a, b) => {
+    if (a.v === null && b.v === null) return byName.compare(a.s.name, b.s.name);
+    if (a.v === null) return 1; // missing values last in both directions
+    if (b.v === null) return -1;
+    const c = typeof a.v === 'string' ? byName.compare(a.v, b.v) : a.v - b.v;
+    return c * sign || byName.compare(a.s.name, b.s.name);
+  }).map(x => x.s);
 }
 
 function step(delta) {
@@ -327,9 +379,9 @@ async function deleteSelected() {
   const page = current();
   const uids = [...state.selected];
   if (!page || !uids.length) return;
-  if (uids.length > 1 && !(await ask(t('ask.deleteSpikelets', {n: uids.length})))) return;
   edit(p => { p.spikelets = p.spikelets.filter(s => !state.selected.has(s.uid)); });
   select(null);
+  toast(t('detail.deleted', {n: uids.length}), 'info', undoAction());
 }
 
 function focusSelection(keepZoom = false) {
@@ -346,7 +398,7 @@ function focusSelection(keepZoom = false) {
     if (visible && v.scale > 0.25) return;
   }
   const pad = Math.max(box.x1 - box.x0, box.y1 - box.y0) * 0.6 + 40;
-  viewer.fitBox({x0: box.x0 - pad, y0: box.y0 - pad, x1: box.x1 + pad, y1: box.y1 + pad}, 0);
+  viewer.fitBox({x0: box.x0 - pad, y0: box.y0 - pad, x1: box.x1 + pad, y1: box.y1 + pad}, 0, {animate: true});
 }
 
 // ---------------------------------------------------------------- tools and drafts
@@ -433,6 +485,7 @@ const viewer = createViewer($('#canvas'), {
       draft: state.draft && state.draft.kind !== 'ruler' ? state.draft : null,
       ruler: state.draft?.kind === 'ruler' ? state.draft.points : state.rulerLine,
       showCandidatesOfSelected: true,
+      hoverUid: state.rowHover,
       candidateCursor: s => (s.uid === state.primaryUid ? state.candidateCursor.get(s.uid) : undefined),
       statusOf: s => statusOf(s, page),
       labelOf: s => `${s.name} · ${fmt(lengthOf(s, page))}`
@@ -469,10 +522,16 @@ const viewer = createViewer($('#canvas'), {
   onCursor(p) {
     $('#cursor').textContent = p ? `${Math.round(p[0])}, ${Math.round(p[1])} px` : '';
   },
+  onHover(uid) {
+    for (const tr of $$('#rows tr[data-hover]')) delete tr.dataset.hover;
+    const s = spikeletByUid(current(), uid);
+    if (s) $(`#rows tr[data-uid="${CSS.escape(uid)}"]`)?.setAttribute('data-hover', '');
+    $('#hover-info').textContent = s ? `${t('col.id')} ${s.name} · ${fmt(lengthOf(s))} mm · ${t(`status.${statusOf(s)}`)}` : '';
+  },
   onView(v) {
-    $('#zoom').textContent = `${Math.round(v.scale * 100)}%`;
+    $('#zoom-level').textContent = `${Math.round(v.scale * 100)}%`;
   }
-});
+}, {minimap: $('#minimap')});
 
 // ---------------------------------------------------------------- service
 
@@ -494,6 +553,8 @@ async function checkService() {
     state.service = {state: 'offline', info: null};
   }
   renderService();
+  renderStage();
+  renderBatch();
 }
 
 function renderService() {
@@ -527,16 +588,19 @@ function hasReview(page) {
 async function measure(page, {askReplace = true} = {}) {
   if (!serviceUsable()) return false;
   if (askReplace && settings.confirmReplace && hasReview(page) && !(await ask(t('ask.replace', {name: page.name})))) return false;
-  page.job = {state: 'queued', stage: 'queued', progress: 0};
+  const controller = new AbortController();
+  page.job = {state: 'queued', stage: 'queued', progress: 0, started: Date.now(), controller};
   renderAll();
   try {
     const job = await api().measure(page.blob, {
       name: page.name,
       periods: cal.servicePeriods(page.calibration),
+      signal: controller.signal,
       onProgress(j) {
-        page.job = {state: j.state, stage: j.stage, progress: j.progress ?? 0};
+        Object.assign(page.job, {state: j.state, stage: j.stage, progress: j.progress ?? 0});
         renderJob();
         renderImageList();
+        renderBatch();
       }
     });
     const result = job.result;
@@ -554,9 +618,14 @@ async function measure(page, {askReplace = true} = {}) {
       state.selected.clear();
       state.primaryUid = null;
     }
-    toast(t('measure.done', {name: page.name, n: page.spikelets.length}));
+    toast(t('measure.done', {name: page.name, n: page.spikelets.length}), 'info', page.id === state.currentId ? undoAction() : null);
     return true;
   } catch (error) {
+    if (controller.signal.aborted) {
+      page.job = null;
+      toast(t('job.cancelled', {name: page.name}));
+      return false;
+    }
     page.job = {state: 'error', error: error.message};
     toast(t('error.measure', {name: page.name, error: error.message}), 'error');
     return false;
@@ -574,26 +643,45 @@ async function runBatch(pages) {
     return;
   }
   if (!serviceUsable()) return;
-  state.batch = {total: todo.length, done: 0, stop: false};
+  state.batch = {total: todo.length, done: 0, stop: false, started: Date.now(), current: null};
   renderBatch();
   for (const page of todo) {
     if (state.batch.stop) break;
     if (!state.pages.includes(page)) continue;
+    state.batch.current = page;
     await measure(page, {askReplace: false});
     state.batch.done++;
     renderBatch();
   }
+  const {done, total} = state.batch;
   state.batch = null;
   renderBatch();
+  if (total > 1) toast(t('batch.finished', {done, total}));
 }
 
 function renderBatch() {
   const b = state.batch;
+  const usable = serviceUsable(false);
   $('#measure-pending').hidden = Boolean(b);
+  $('#measure-pending').disabled = !usable;
+  $('#measure-pending').title = usable ? '' : t('error.service');
   $('#batch-stop').hidden = !b;
   $('#batch-stop').disabled = Boolean(b?.stop);
   $('#batch-progress').hidden = !b;
-  if (b) $('#batch-progress').textContent = t('batch.progress', {done: b.done, total: b.total}) + (b.stop ? ' · ' + t('batch.stopping') : '');
+  if (!b) return;
+  const partial = b.current?.job?.progress ?? 0;
+  const fraction = (b.done + Math.min(1, partial)) / b.total;
+  $('#batch-bar').style.width = `${Math.round(fraction * 100)}%`;
+  const elapsed = (Date.now() - b.started) / 1000;
+  const eta = b.done > 0 ? (elapsed / b.done) * (b.total - b.done) : null;
+  $('#batch-text').textContent = t('batch.progress', {done: b.done, total: b.total}) +
+    (eta !== null ? ' · ' + t('batch.eta', {time: formatDuration(eta)}) : '') +
+    (b.stop ? ' · ' + t('batch.stopping') : '');
+}
+
+function formatDuration(seconds) {
+  const s = Math.max(0, Math.round(seconds));
+  return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s`;
 }
 
 // ---------------------------------------------------------------- calibration dialog
@@ -794,11 +882,20 @@ function renderImageList() {
     }
     const n = page.spikelets.length;
     const done = page.spikelets.filter(s => statusOf(s, page) === STATUS.confirmed).length;
-    sub.append(document.createTextNode(
-      !cal.isValid(page.calibration) ? t('images.uncalibrated') : n ? t('images.confirmed', {done, n}) : page.run ? t('images.measured', {n}) : t('images.notMeasured')
-    ));
+    if (!cal.isValid(page.calibration)) {
+      const pill = Object.assign(document.createElement('span'), {className: 'pill', textContent: t('images.uncalibrated')});
+      pill.dataset.state = 'uncalibrated';
+      sub.append(pill);
+    }
+    sub.append(document.createTextNode(n ? t('images.confirmed', {done, n}) : page.run ? t('images.measured', {n}) : t('images.notMeasured')));
     text.append(name, sub);
     li.append(check, thumb, text);
+    if (n) {
+      const bar = document.createElement('div');
+      bar.className = 'bar progress';
+      bar.append(Object.assign(document.createElement('i'), {style: `width: ${(100 * done) / n}%`}));
+      li.append(bar);
+    }
     li.addEventListener('click', () => openPage(page.id));
     return li;
   }));
@@ -825,7 +922,9 @@ function renderStage() {
   }
   $('#calibrate-open').disabled = !page;
   const busy = page?.job && ['queued', 'running'].includes(page.job.state);
-  $('#measure-run').disabled = !page || busy;
+  const usable = serviceUsable(false);
+  $('#measure-run').disabled = !page || busy || !usable;
+  $('#measure-run').title = usable ? '' : t('error.service');
   $('#measure-run').textContent = page?.run ? t('action.remeasure') : t('action.measure');
   const used = page?.run?.periods, now = cal.servicePeriods(page?.calibration);
   $('#stale-notice').hidden = !(used && now && (Math.abs(used.x - now.x_period_px) > 1e-6 * used.x || Math.abs(used.y - now.y_period_px) > 1e-6 * used.y));
@@ -840,6 +939,7 @@ function renderJob() {
   if (!active) return;
   $('#job-bar').style.width = `${Math.round((job.progress ?? 0) * 100)}%`;
   $('#job-text').textContent = t(`job.stage.${job.stage ?? 'queued'}`, {pct: Math.round((job.progress ?? 0) * 100)});
+  $('#job-cancel').disabled = !job.controller || job.controller.signal.aborted;
 }
 
 function renderSteps() {
@@ -855,7 +955,11 @@ function renderSteps() {
   };
   const order = ['import', 'calibrate', 'measure', 'review', 'export'];
   const firstOpen = order.find(k => !done[k]);
-  for (const li of $$('#steps li')) li.dataset.state = done[li.dataset.step] ? 'done' : li.dataset.step === firstOpen ? 'current' : 'todo';
+  const reachable = {import: true, calibrate: Boolean(page), measure: Boolean(page), review: total > 0, export: state.pages.some(p => p.spikelets.length)};
+  for (const li of $$('#steps li')) {
+    li.dataset.state = done[li.dataset.step] ? 'done' : li.dataset.step === firstOpen ? 'current' : 'todo';
+    li.querySelector('button').disabled = !reachable[li.dataset.step];
+  }
 }
 
 function renderResults() {
@@ -863,14 +967,21 @@ function renderResults() {
   const all = page?.spikelets ?? [];
   const statuses = all.map(s => statusOf(s, page));
   const lengths = all.map(s => lengthOf(s, page)).filter(v => v !== null);
-  const mean = lengths.length ? lengths.reduce((a, b) => a + b, 0) / lengths.length : null;
+  const stats = summarize(lengths);
   const confirmed = statuses.filter(s => s === STATUS.confirmed).length;
-  $('#summary').innerHTML = '';
-  for (const [value, label] of [[all.length, 'summary.spikelets'], [fmt(mean), 'summary.mean'], [`${confirmed}/${all.length}`, 'summary.confirmed']]) {
+  $('#stats').hidden = !all.length;
+  $('#summary').replaceChildren(...[
+    [all.length, 'summary.spikelets'],
+    [stats.n, 'summary.measured'],
+    [stats.sd === null ? fmt(stats.mean) : `${fmt(stats.mean, 1)} ± ${fmt(stats.sd, 1)}`, 'summary.mean'],
+    [fmt(stats.median, 1), 'summary.median']
+  ].map(([value, label]) => {
     const div = document.createElement('div');
     div.append(Object.assign(document.createElement('b'), {textContent: value}), Object.assign(document.createElement('span'), {textContent: t(label)}));
-    $('#summary').append(div);
-  }
+    return div;
+  }));
+  renderReviewProgress(statuses);
+  renderHistogram(lengths);
   for (const b of $$('#filters [data-filter]')) {
     const test = FILTERS[b.dataset.filter];
     b.setAttribute('aria-pressed', String(b.dataset.filter === state.filter));
@@ -885,14 +996,79 @@ function renderResults() {
     const status = statusOf(s, page);
     const badge = Object.assign(document.createElement('span'), {className: 'badge', textContent: t(`status.${status}`)});
     badge.dataset.status = status;
-    const cells = [s.name, fmt(lengthOf(s, page))].map((text, i) => Object.assign(document.createElement('td'), {textContent: text, className: i ? 'num' : ''}));
+    const score = representative(s)?.score;
+    const cells = [[s.name, ''], [fmt(lengthOf(s, page)), 'num'], [fmt(score, 2), 'num score']]
+      .map(([text, className]) => Object.assign(document.createElement('td'), {textContent: text, className}));
     const statusCell = document.createElement('td');
     statusCell.append(badge);
     tr.append(...cells, statusCell);
     return tr;
   }));
   $('#no-rows').hidden = rows.length > 0 || !all.length;
+  for (const b of $$('.sort')) {
+    if (b.dataset.sort === state.sort.key) b.dataset.dir = state.sort.dir;
+    else delete b.dataset.dir;
+  }
   $('#confirm-visible').disabled = !rows.some(s => canConfirm(s) && statusOf(s, page) !== STATUS.confirmed);
+}
+
+const STATUS_COLORS = [STATUS.confirmed, STATUS.modified, STATUS.automatic, STATUS.needsReview, STATUS.missing];
+
+function renderReviewProgress(statuses) {
+  const bar = $('#review-progress');
+  const n = statuses.length || 1;
+  bar.replaceChildren(...STATUS_COLORS.map(status => {
+    const count = statuses.filter(s => s === status).length;
+    const i = document.createElement('i');
+    i.style.width = `${(100 * count) / n}%`;
+    i.style.background = `var(--st-${status})`;
+    i.title = `${t(`status.${status}`)}: ${count}`;
+    return i;
+  }));
+  const confirmed = statuses.filter(s => s === STATUS.confirmed).length;
+  bar.title = t('summary.confirmedOf', {done: confirmed, n: statuses.length});
+}
+
+function renderHistogram(lengths) {
+  const svg = $('#histogram');
+  const bins = histogram(lengths);
+  const max = Math.max(1, ...bins.map(b => b.count));
+  const W = 300, H = 70, gap = 2;
+  const w = bins.length ? W / bins.length : W;
+  const ns = 'http://www.w3.org/2000/svg';
+  const range = state.lengthRange;
+  svg.replaceChildren(...bins.map((b, i) => {
+    const rect = document.createElementNS(ns, 'rect');
+    const h = (b.count / max) * (H - 4);
+    rect.setAttribute('x', String(i * w + gap / 2));
+    rect.setAttribute('y', String(H - h));
+    rect.setAttribute('width', String(Math.max(1, w - gap)));
+    rect.setAttribute('height', String(Math.max(b.count ? 1.5 : 0, h)));
+    if (range && range[0] === b.x0 && range[1] === b.x1) rect.classList.add('selected');
+    const title = document.createElementNS(ns, 'title');
+    title.textContent = t('summary.bin', {x0: +b.x0.toFixed(2), x1: +b.x1.toFixed(2), n: b.count});
+    rect.append(title);
+    rect.addEventListener('click', () => {
+      state.lengthRange = range && range[0] === b.x0 ? null : [b.x0, b.x1];
+      renderResults();
+    });
+    return rect;
+  }));
+  svg.setAttribute('aria-label', t('summary.histogram'));
+  const axis = $('#hist-axis');
+  axis.replaceChildren();
+  if (bins.length) {
+    const left = Object.assign(document.createElement('span'), {textContent: `${+bins[0].x0.toFixed(2)} mm`});
+    const mid = document.createElement('span');
+    if (range) {
+      mid.textContent = t('summary.range', {x0: +range[0].toFixed(2), x1: +range[1].toFixed(2)}) + ' ';
+      const clear = Object.assign(document.createElement('button'), {className: 'link small', type: 'button', textContent: t('summary.clearRange')});
+      clear.onclick = () => { state.lengthRange = null; renderResults(); };
+      mid.append(clear);
+    }
+    const right = Object.assign(document.createElement('span'), {textContent: `${+bins.at(-1).x1.toFixed(2)} mm`});
+    axis.append(left, mid, right);
+  }
 }
 
 function renderDetail() {
@@ -972,6 +1148,22 @@ function renderInspect() {
   ]);
 }
 
+function openHelp() {
+  const list = $('#shortcut-list');
+  list.replaceChildren(...SHORTCUTS.map(({keys, label}) => {
+    const row = document.createElement('div');
+    const name = Object.assign(document.createElement('span'), {textContent: t(label)});
+    const combo = document.createElement('span');
+    keys.forEach((k, i) => {
+      if (i) combo.append(' ');
+      combo.append(Object.assign(document.createElement('kbd'), {textContent: k}));
+    });
+    row.append(name, combo);
+    return row;
+  }));
+  $('#help-dialog').showModal();
+}
+
 function fillFacts(dl, facts) {
   dl.replaceChildren(...facts.flatMap(([key, value]) => [
     Object.assign(document.createElement('dt'), {textContent: t(key)}),
@@ -1039,7 +1231,53 @@ function wire() {
     if (state.batch) state.batch.stop = true;
     renderBatch();
   };
-  $('#samples-open').onclick = openSamples;
+  $('#samples-open').onclick = $('#empty-sample').onclick = openSamples;
+  $('#help-open').onclick = openHelp;
+  $('#job-cancel').onclick = () => {
+    const job = current()?.job;
+    job?.controller?.abort();
+    renderJob();
+  };
+  $('#zoom-in').onclick = () => viewer.zoomBy(1.25);
+  $('#zoom-out').onclick = () => viewer.zoomBy(0.8);
+  $('#zoom-level').onclick = () => viewer.fit({animate: true});
+  const stepActions = {
+    import: () => $('#import-open').click(),
+    calibrate: () => { state.rulerLine = null; openCalibration(); },
+    measure: () => current() && measure(current()),
+    review: () => {
+      state.filter = 'pending';
+      $('[data-tab="results"]').click();
+      renderResults();
+      const first = visibleSpikelets()[0];
+      if (first) {
+        select(first.uid);
+        focusSelection(true);
+      }
+    },
+    export: openExport
+  };
+  for (const li of $$('#steps li')) li.querySelector('button').onclick = () => stepActions[li.dataset.step]();
+  for (const b of $$('.sort')) {
+    b.onclick = () => {
+      const key = b.dataset.sort;
+      state.sort = {key, dir: state.sort.key === key && state.sort.dir === 'asc' ? 'desc' : 'asc'};
+      renderResults();
+    };
+  }
+  $('#rows').addEventListener('pointerover', e => {
+    const uid = e.target.closest('tr[data-uid]')?.dataset.uid ?? null;
+    if (uid === state.rowHover) return;
+    state.rowHover = uid;
+    viewer.render();
+  });
+  $('#rows').addEventListener('pointerleave', () => {
+    state.rowHover = null;
+    viewer.render();
+  });
+  $('#export-stats').onclick = () => {
+    download('awnstudio_summary.csv', summaryCsv(state.pages, {threshold: state.threshold}), 'text/csv');
+  };
   $('#service-retry').onclick = checkService;
 
   $('#measure-run').onclick = () => current() && measure(current());
@@ -1238,12 +1476,21 @@ function wire() {
   }
 
   window.addEventListener('keydown', onKey);
-  window.addEventListener('beforeunload', () => { autosave.flush(); });
+  window.addEventListener('pagehide', () => { autosave.flush(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') autosave.flush();
+  });
 }
 
 function onKey(e) {
   const target = e.target;
-  if (target.closest?.('input, select, textarea, dialog[open]') || !current()) return;
+  if (target.closest?.('input, select, textarea, dialog[open]')) return;
+  if (e.key === '?') {
+    e.preventDefault();
+    openHelp();
+    return;
+  }
+  if (!current()) return;
   const ctrl = e.ctrlKey || e.metaKey;
   const key = e.key.toLowerCase();
   if (ctrl && key === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }

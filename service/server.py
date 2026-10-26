@@ -65,6 +65,10 @@ def calibration_json(calibration) -> dict:
     }
 
 
+class JobCancelled(Exception):
+    pass
+
+
 @dataclass
 class Job:
     id: str
@@ -76,6 +80,7 @@ class Job:
     progress: float = 0.0
     result: dict | None = None
     error: str | None = None
+    cancel_requested: bool = False
     created: float = field(default_factory=time.time)
 
     def public(self) -> dict:
@@ -121,10 +126,14 @@ class Measurer:
         return job
 
     def cancel(self, job_id: str) -> bool:
+        """Cancel a queued job now, or a running one at its next progress step."""
         with self.lock:
             job = self.jobs.get(job_id)
             if job and job.state == "queued":
                 job.state, job.image = "cancelled", None
+                return True
+            if job and job.state == "running":
+                job.cancel_requested = True
                 return True
         return False
 
@@ -139,6 +148,8 @@ class Measurer:
             try:
                 job.result = self._run(job)
                 job.state, job.progress = "done", 1.0
+            except JobCancelled:
+                job.state = "cancelled"
             except Exception as error:  # reported to the browser
                 traceback.print_exc()
                 job.state, job.error = "error", f"{type(error).__name__}: {error}"
@@ -178,8 +189,12 @@ class Measurer:
 
         def progress(done: int, total: int):
             job.progress = 0.9 * done / max(1, total)
+            if job.cancel_requested:
+                raise JobCancelled()
 
         observations = segmenter.predict_page(image, progress=progress)
+        if job.cancel_requested:
+            raise JobCancelled()
         job.stage = "reconstruct"
         page_id = Path(job.name).stem or job.id
         result = reconstruct_page(page_id, observations, width, height, calibration).to_json()
@@ -346,6 +361,8 @@ def make_handler(measurer: Measurer, samples: Samples):
             self._error(404, "not found")
 
         def _static(self, path: str):
+            if path == "/favicon.ico":
+                path = "/assets/icon.svg"
             relative = path.lstrip("/") or "index.html"
             target = (WEB / relative).resolve()
             if target.is_dir():

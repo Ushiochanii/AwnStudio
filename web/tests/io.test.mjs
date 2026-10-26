@@ -90,7 +90,7 @@ test('settings are normalized against defaults', () => {
   assert.equal(loadSettings({getItem: () => null}, 'zh').language, 'zh');
 });
 
-test('every locale key exists in English and every used key is translated to Chinese', () => {
+test('every locale key exists in English and every used key is translated', () => {
   const en = new Set(keys('en'));
   for (const locale of ['zh', 'ja']) for (const key of keys(locale)) assert.ok(en.has(key), `${locale}: ${key}`);
   const used = new Set();
@@ -99,16 +99,24 @@ test('every locale key exists in English and every used key is translated to Chi
   for (const file of readdirSync(new URL('js/', WEB))) {
     const src = readFileSync(new URL(`js/${file}`, WEB), 'utf8');
     for (const m of src.matchAll(/\bt\('([a-zA-Z_.]+)'/g)) used.add(m[1]);
+    for (const m of src.matchAll(/label: '([a-zA-Z_.]+)'/g)) used.add(m[1]);
   }
-  const zh = new Set(keys('zh'));
-  for (const key of used) {
-    assert.ok(en.has(key), `missing English copy: ${key}`);
-    assert.ok(zh.has(key), `missing Chinese copy: ${key}`);
+  // Keys built from a prefix at run time.
+  for (const status of ['automatic', 'needs_review', 'modified', 'confirmed', 'missing']) used.add(`status.${status}`);
+  for (const reason of ['calibration_qc', 'weak_spikelet', 'low_score', 'gap_bridged', 'long_chain']) used.add(`reason.${reason}`);
+  for (const stage of ['queued', 'loading', 'calibrate', 'detect', 'reconstruct']) used.add(`job.stage.${stage}`);
+  for (const locale of ['zh', 'ja']) {
+    const have = new Set(keys(locale));
+    for (const key of used) {
+      assert.ok(en.has(key), `missing English copy: ${key}`);
+      assert.ok(have.has(key), `missing ${locale} copy: ${key}`);
+    }
   }
   setLocale('zh');
   assert.equal(t('images.measured', {n: 3}), '3 个小穗');
   setLocale('ja');
-  assert.equal(t('export.nothing'), 'Nothing to export yet.', 'falls back to English');
+  assert.equal(t('images.measured', {n: 3}), '小穂 3');
+  assert.equal(t('no.such.key'), 'no.such.key');
   setLocale('en');
 });
 
@@ -164,4 +172,11 @@ test('exported rows follow natural ID order', () => {
   p.spikelets[1].name = '2';
   const ids = simpleCsv(p).split('\r\n').slice(1).map(line => line.split(',')[0]);
   assert.deepEqual(ids, ['"2"', '"10"']);
+});
+
+test('summary CSV has one row of statistics per measured image', async () => {
+  const {summaryCsv, SUMMARY_HEADER} = await import('../js/export.mjs');
+  const lines = summaryCsv([page()]).slice(1).split('\r\n');
+  assert.equal(lines[0], SUMMARY_HEADER.map(h => `"${h}"`).join(','));
+  assert.equal(lines[1], '"IMG_1.JPG","2","1","0","10.000","","10.000","10.000","10.000"');
 });

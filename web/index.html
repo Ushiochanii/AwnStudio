@@ -12,11 +12,11 @@
 <header class="topbar">
   <div class="brand"><img src="assets/icon.svg" alt="" width="22" height="22"><span>AwnStudio</span></div>
   <ol class="steps" id="steps" aria-label="Workflow">
-    <li data-step="import" data-i18n="step.import">Import</li>
-    <li data-step="calibrate" data-i18n="step.calibrate">Calibrate</li>
-    <li data-step="measure" data-i18n="step.measure">Measure</li>
-    <li data-step="review" data-i18n="step.review">Review</li>
-    <li data-step="export" data-i18n="step.export">Export</li>
+    <li data-step="import"><button type="button" data-i18n="step.import">Import</button></li>
+    <li data-step="calibrate"><button type="button" data-i18n="step.calibrate">Calibrate</button></li>
+    <li data-step="measure"><button type="button" data-i18n="step.measure">Measure</button></li>
+    <li data-step="review"><button type="button" data-i18n="step.review">Review</button></li>
+    <li data-step="export"><button type="button" data-i18n="step.export">Export</button></li>
   </ol>
   <div class="topbar-actions">
     <span class="service" id="service-status" data-state="unknown"><i></i><span id="service-label"></span>
@@ -25,6 +25,7 @@
     <button id="open-project" data-i18n="action.openProject">Open project</button>
     <button id="save-project" data-i18n="action.saveProject">Save project</button>
     <button class="primary" id="export-open" data-i18n="action.export">Export</button>
+    <button class="icon" id="help-open" data-i18n-title="help.title" title="Keyboard shortcuts (?)" aria-label="Help">?</button>
     <button class="icon" id="settings-open" data-i18n-title="settings.title" title="Settings" aria-label="Settings">⚙</button>
   </div>
 </header>
@@ -38,7 +39,10 @@
     <div class="batch">
       <button id="measure-pending" data-i18n="batch.run">Measure all pending</button>
       <button id="batch-stop" data-i18n="batch.stop" hidden>Stop after current</button>
-      <div class="batch-progress" id="batch-progress" hidden></div>
+      <div class="batch-progress" id="batch-progress" hidden>
+        <div class="bar"><i id="batch-bar"></i></div>
+        <span id="batch-text"></span>
+      </div>
     </div>
     <div class="list-tools">
       <label><input type="checkbox" id="select-all-images"> <span data-i18n="images.selectAll">Select all</span></label>
@@ -63,6 +67,7 @@
     </div>
     <div class="job-strip" id="job-strip" hidden>
       <div class="bar"><i id="job-bar"></i></div><span id="job-text"></span>
+      <button class="link small" id="job-cancel" data-i18n="job.cancel">Cancel</button>
     </div>
     <div class="notice" id="stale-notice" hidden data-i18n="notice.stale">Calibration changed after measurement. Lengths use the new scale; measure again to rerun reconstruction with it.</div>
 
@@ -70,8 +75,17 @@
       <canvas id="canvas"></canvas>
       <div class="empty" id="empty">
         <img src="assets/empty.svg" alt="" width="140" height="100">
-        <p data-i18n="empty.title">Drop page images here, or import them.</p>
-        <button class="primary" id="empty-import" data-i18n="action.import">Import</button>
+        <h2 data-i18n="empty.title">Drop page images here, or import them.</h2>
+        <ol class="guide">
+          <li><b data-i18n="step.import">Import</b><span data-i18n="empty.import">Scans of spikelets on 5 mm graph paper (JPEG, PNG, WebP).</span></li>
+          <li><b data-i18n="step.calibrate">Calibrate</b><span data-i18n="empty.calibrate">The grid is detected automatically; a known distance works too.</span></li>
+          <li><b data-i18n="step.measure">Measure</b><span data-i18n="empty.measure">The model finds spikelets and traces each awn.</span></li>
+          <li><b data-i18n="step.review">Review</b><span data-i18n="empty.review">Check flagged spikelets, correct paths, confirm, export.</span></li>
+        </ol>
+        <div class="row center">
+          <button class="primary" id="empty-import" data-i18n="action.import">Import</button>
+          <button id="empty-sample" data-i18n="samples.open">Open sample pages…</button>
+        </div>
       </div>
       <div class="toolbar" id="toolbar" role="toolbar">
         <button data-tool="select" data-i18n-title="tool.select" title="Select (V)">⬚</button>
@@ -102,6 +116,12 @@
           </div>
         </details>
       </div>
+      <div class="zoom-controls" id="zoom-controls">
+        <button id="zoom-out" aria-label="Zoom out" data-i18n-title="tool.zoomOut">−</button>
+        <button id="zoom-level" class="zoom-level" data-i18n-title="tool.fit">100%</button>
+        <button id="zoom-in" aria-label="Zoom in" data-i18n-title="tool.zoomIn">+</button>
+      </div>
+      <canvas class="minimap" id="minimap" width="180" height="128" aria-hidden="true"></canvas>
       <div class="draw-bar" id="draw-bar" hidden>
         <span id="draw-text"></span>
         <button class="primary small" id="draw-finish" data-i18n="draw.finish">Finish</button>
@@ -111,8 +131,8 @@
     <footer class="statusbar">
       <span id="hint"></span>
       <span class="spacer"></span>
+      <span id="hover-info"></span>
       <span id="cursor"></span>
-      <span id="zoom"></span>
     </footer>
   </section>
 
@@ -124,7 +144,12 @@
     </div>
 
     <section class="tab-body" data-body="results">
-      <div class="summary" id="summary"></div>
+      <div class="stats" id="stats">
+        <div class="stat-row" id="summary"></div>
+        <div class="progress" id="review-progress" title=""><i></i></div>
+        <svg class="histogram" id="histogram" viewBox="0 0 300 70" preserveAspectRatio="none" role="img"></svg>
+        <div class="hist-axis muted small" id="hist-axis"></div>
+      </div>
       <div class="filters" id="filters">
         <button data-filter="all" data-i18n="filter.all">All</button>
         <button data-filter="pending" data-i18n="filter.pending">Not confirmed</button>
@@ -138,7 +163,12 @@
       </div>
       <div class="table-scroll">
         <table class="results">
-          <thead><tr><th data-i18n="col.id">ID</th><th class="num" data-i18n="col.length">Awn (mm)</th><th data-i18n="col.status">Status</th></tr></thead>
+          <thead><tr>
+            <th><button class="sort" data-sort="name" data-i18n="col.id">ID</button></th>
+            <th class="num"><button class="sort" data-sort="length" data-i18n="col.length">Awn (mm)</button></th>
+            <th class="num"><button class="sort" data-sort="score" data-i18n="inspect.score">Score</button></th>
+            <th><button class="sort" data-sort="status" data-i18n="col.status">Status</button></th>
+          </tr></thead>
           <tbody id="rows"></tbody>
         </table>
         <p class="muted center" id="no-rows" hidden data-i18n="results.none">No spikelets match.</p>
@@ -240,6 +270,7 @@
       <button type="button" id="export-current"><strong data-i18n="export.current">This image (CSV)</strong><small data-i18n="export.currentHelp">ID and awn length in mm</small></button>
       <button type="button" id="export-all"><strong data-i18n="export.all">All images (ZIP of CSV)</strong><small data-i18n="export.allHelp">One CSV per measured image</small></button>
       <button type="button" id="export-detailed"><strong data-i18n="export.detailed">Detailed project CSV</strong><small data-i18n="export.detailedHelp">Automatic and final length, review state, score, calibration</small></button>
+      <button type="button" id="export-stats"><strong data-i18n="export.stats">Summary per image (CSV)</strong><small data-i18n="export.statsHelp">n, mean, SD, median, min and max awn length</small></button>
     </div>
     <menu><button value="close" data-i18n="action.close">Close</button></menu>
   </form>
@@ -275,6 +306,15 @@
   </form>
 </dialog>
 
+<dialog id="help-dialog" class="wide">
+  <form method="dialog">
+    <h2 data-i18n="help.title">Keyboard shortcuts</h2>
+    <div class="shortcuts" id="shortcut-list"></div>
+    <p class="muted small" data-i18n="help.mouse">Wheel zooms, dragging empty space pans, Shift-drag selects several spikelets, Ctrl-click adds to the selection.</p>
+    <menu><button value="close" data-i18n="action.close">Close</button></menu>
+  </form>
+</dialog>
+
 <dialog id="confirm-dialog">
   <form method="dialog">
     <p id="confirm-text"></p>
@@ -282,7 +322,7 @@
   </form>
 </dialog>
 
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"><span id="toast-text"></span><button class="link" id="toast-action" hidden></button></div>
 <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" multiple hidden>
 <input type="file" id="folder-input" webkitdirectory multiple hidden>
 <input type="file" id="project-input" accept=".json,application/json" hidden>

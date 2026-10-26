@@ -1,7 +1,9 @@
-// Canvas viewer: pan / zoom, layered drawing, hit testing and pointer editing.
+// Canvas viewer: pan / zoom, layered drawing, hit testing, pointer editing and
+// an overview minimap.
 //
 // The viewer never mutates data itself. It reads a scene from `host.scene()`
-// and reports intents (select, move a vertex, finish a drawing) back to the host.
+// and reports intents (select, hover, move a vertex, finish a drawing) back to
+// the host.
 
 import {bounds, distance, nearestOnPath, nearestVertex, pointInPolygon, polygonArea} from './geometry.mjs';
 
@@ -9,17 +11,36 @@ const HANDLE_PX = 8;
 const DRAG_PX = 3;
 const MIN_SCALE = 0.02;
 const MAX_SCALE = 40;
+const DRAFT_MARGIN_PX = 24; // clicks further outside the page than this are ignored
+const LABEL_ID_ONLY_SCALE = 0.16; // below this zoom labels show the ID only
+const ANIMATION_MS = 180;
 
-export function createViewer(canvas, host) {
+// Greedy label placement: keep a label only if it does not overlap one already
+// placed. Items earlier in the list win. Exported for tests.
+export function placeLabels(items, gap = 2) {
+  const placed = [];
+  return items.filter(item => {
+    const r = item.rect;
+    const clash = placed.some(p => r.x < p.x + p.w + gap && p.x < r.x + r.w + gap && r.y < p.y + p.h + gap && p.y < r.y + r.h + gap);
+    if (!clash) placed.push(r);
+    return !clash;
+  });
+}
+
+export function createViewer(canvas, host, {minimap = null} = {}) {
   const ctx = canvas.getContext('2d');
   const view = {scale: 1, tx: 0, ty: 0};
   let frame = 0;
+  let animation = 0;
   let gesture = null; // {kind: 'pan' | 'vertex' | 'box' | 'click', ...}
   let cursor = null; // image coordinates
+  let hoverUid = null;
   let spaceDown = false;
   let fitted = null; // page id the view was last fitted to
+  let palette = {};
+  let overview = {pageId: null, image: null, bitmap: null};
+  const wrap = canvas.parentElement;
 
-  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const size = () => ({w: canvas.clientWidth, h: canvas.clientHeight});
   const toImage = (sx, sy) => [(sx - view.tx) / view.scale, (sy - view.ty) / view.scale];
   const toScreen = ([x, y]) => [x * view.scale + view.tx, y * view.scale + view.ty];
@@ -27,6 +48,15 @@ export function createViewer(canvas, host) {
     const rect = canvas.getBoundingClientRect();
     return [event.clientX - rect.left, event.clientY - rect.top];
   };
+
+  function readPalette() {
+    const style = getComputedStyle(document.documentElement);
+    const get = name => style.getPropertyValue(name).trim();
+    palette = {
+      surface: get('--surface'), focus: get('--focus'), accent: get('--accent'),
+      status: Object.fromEntries(['automatic', 'needs_review', 'modified', 'confirmed', 'missing'].map(s => [s, get(`--st-${s}`) || '#888']))
+    };
+  }
 
   function requestRender() {
     if (!frame) frame = requestAnimationFrame(() => { frame = 0; render(); });
@@ -40,20 +70,39 @@ export function createViewer(canvas, host) {
     requestRender();
   }
 
-  function fitBox(box, padding = 0.04) {
+  // Ease from the current view to a target view.
+  function animateTo(scale, tx, ty) {
+    cancelAnimationFrame(animation);
+    const from = {...view};
+    const start = performance.now();
+    const ease = t => 1 - (1 - t) ** 3;
+    const stepFrame = now => {
+      const t = Math.min(1, (now - start) / ANIMATION_MS);
+      const k = ease(t);
+      // Interpolate the scale geometrically so zooming feels even.
+      const s = from.scale * (scale / from.scale) ** k;
+      setView(s, from.tx + (tx - from.tx) * k, from.ty + (ty - from.ty) * k);
+      if (t < 1) animation = requestAnimationFrame(stepFrame);
+    };
+    animation = requestAnimationFrame(stepFrame);
+  }
+
+  function fitBox(box, padding = 0.04, {animate = false} = {}) {
     const {w, h} = size();
     if (!w || !h) return;
     const bw = Math.max(1, box.x1 - box.x0), bh = Math.max(1, box.y1 - box.y0);
-    const scale = Math.min(w / bw, h / bh) * (1 - 2 * padding);
-    setView(scale, w / 2 - ((box.x0 + box.x1) / 2) * scale, h / 2 - ((box.y0 + box.y1) / 2) * scale);
+    const scale = Math.min(MAX_SCALE, Math.min(w / bw, h / bh) * (1 - 2 * padding));
+    const tx = w / 2 - ((box.x0 + box.x1) / 2) * scale, ty = h / 2 - ((box.y0 + box.y1) / 2) * scale;
+    animate ? animateTo(scale, tx, ty) : setView(scale, tx, ty);
   }
 
-  function fit() {
+  function fit(options) {
     const page = host.scene().page;
-    if (page) fitBox({x0: 0, y0: 0, x1: page.width, y1: page.height}, 0.02);
+    if (page) fitBox({x0: 0, y0: 0, x1: page.width, y1: page.height}, 0.02, options);
   }
 
   function zoomAt(factor, sx, sy) {
+    cancelAnimationFrame(animation);
     const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, view.scale * factor));
     const [ix, iy] = toImage(sx, sy);
     setView(scale, sx - ix * scale, sy - iy * scale);
@@ -68,6 +117,7 @@ export function createViewer(canvas, host) {
   }
 
   function render() {
+    readPalette();
     const dpr = window.devicePixelRatio || 1;
     const {w, h} = size();
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
@@ -78,7 +128,10 @@ export function createViewer(canvas, host) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const scene = host.scene();
     const {page, image, layers} = scene;
-    if (!page) return;
+    if (!page) {
+      renderMinimap(scene);
+      return;
+    }
     if (fitted !== page.id) {
       fitted = page.id;
       fit();
@@ -86,7 +139,7 @@ export function createViewer(canvas, host) {
     ctx.setTransform(dpr * view.scale, 0, 0, dpr * view.scale, dpr * view.tx, dpr * view.ty);
     const px = 1 / view.scale; // one screen pixel in image units
 
-    ctx.fillStyle = css('--surface');
+    ctx.fillStyle = palette.surface;
     ctx.fillRect(0, 0, page.width, page.height);
     if (layers.photo && image) {
       ctx.imageSmoothingEnabled = view.scale < 2;
@@ -97,20 +150,22 @@ export function createViewer(canvas, host) {
       ctx.fillRect(0, 0, page.width, page.height);
     }
 
-    const color = status => css(`--st-${status}`) || '#888';
+    const color = status => palette.status[status] ?? '#888';
     const selected = scene.selected;
+    const hover = scene.hoverUid ?? hoverUid;
     for (const s of scene.spikelets) {
       const status = scene.statusOf(s);
       const isSelected = selected.has(s.uid);
-      if (layers.outlines || isSelected) {
+      const isHover = s.uid === hover;
+      if (layers.outlines || isSelected || isHover) {
         tracePath(s.polygon, true);
-        if (isSelected) {
-          ctx.fillStyle = color(status) + '33';
+        if (isSelected || isHover) {
+          ctx.fillStyle = color(status) + (isSelected ? '33' : '1f');
           ctx.fill();
         }
         ctx.strokeStyle = color(status);
-        ctx.globalAlpha = isSelected ? 1 : 0.75;
-        ctx.lineWidth = (isSelected ? 2 : 1.2) * px;
+        ctx.globalAlpha = isSelected || isHover ? 1 : 0.75;
+        ctx.lineWidth = (isSelected ? 2 : isHover ? 1.8 : 1.2) * px;
         ctx.stroke();
         ctx.globalAlpha = 1;
       }
@@ -120,8 +175,8 @@ export function createViewer(canvas, host) {
           if (c.score !== null && c.score < scene.threshold) return;
           tracePath(c.path);
           ctx.setLineDash([4 * px, 3 * px]);
-          ctx.strokeStyle = k === scene.candidateCursor?.(s) ? css('--focus') : '#5b6b8c';
-          ctx.lineWidth = 1.5 * px;
+          ctx.strokeStyle = k === scene.candidateCursor?.(s) ? palette.focus : '#5b6b8c';
+          ctx.lineWidth = (k === scene.candidateCursor?.(s) ? 2.2 : 1.5) * px;
           ctx.stroke();
           ctx.setLineDash([]);
         });
@@ -130,10 +185,10 @@ export function createViewer(canvas, host) {
         tracePath(s.line);
         ctx.lineCap = ctx.lineJoin = 'round';
         ctx.strokeStyle = 'rgba(0,0,0,0.45)';
-        ctx.lineWidth = (isSelected ? 5 : 3.5) * px;
+        ctx.lineWidth = (isSelected || isHover ? 5 : 3.5) * px;
         ctx.stroke();
         ctx.strokeStyle = isSelected ? '#ffd23f' : '#f2b705';
-        ctx.lineWidth = (isSelected ? 2.5 : 1.8) * px;
+        ctx.lineWidth = (isSelected || isHover ? 2.5 : 1.8) * px;
         ctx.stroke();
         ctx.beginPath();
         ctx.arc(s.line[0][0], s.line[0][1], 3 * px, 0, Math.PI * 2);
@@ -149,18 +204,21 @@ export function createViewer(canvas, host) {
     }
 
     const ruler = scene.ruler;
-    if (ruler?.length) drawMeasureLine(ruler, css('--focus'), px);
+    if (ruler?.length) drawMeasureLine(ruler, palette.focus, px);
     if (scene.draft) drawDraft(scene.draft, px);
     if (gesture?.kind === 'box' && gesture.moved) {
       const [x0, y0] = gesture.start, [x1, y1] = gesture.current;
+      ctx.fillStyle = palette.focus + '1a';
+      ctx.fillRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
       ctx.setLineDash([5 * px, 4 * px]);
-      ctx.strokeStyle = css('--focus');
+      ctx.strokeStyle = palette.focus;
       ctx.lineWidth = px;
       ctx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
       ctx.setLineDash([]);
     }
 
-    if (layers.labels) drawLabels(scene, dpr);
+    if (layers.labels) drawLabels(scene, dpr, hover);
+    renderMinimap(scene);
   }
 
   function drawHandles(points, stroke, px, radius) {
@@ -182,40 +240,152 @@ export function createViewer(canvas, host) {
     ctx.lineWidth = 2 * px;
     ctx.stroke();
     drawHandles(points, stroke, px, 4);
+    if (all.length === 2) {
+      // Live pixel distance next to the ruler.
+      const [a, b] = all;
+      ctx.save();
+      ctx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
+      const [sx, sy] = toScreen([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+      const text = `${distance(a, b).toFixed(1)} px`;
+      ctx.font = '600 12px system-ui, sans-serif';
+      const tw = ctx.measureText(text).width + 10;
+      ctx.fillStyle = stroke;
+      ctx.beginPath();
+      ctx.roundRect(sx - tw / 2, sy - 24, tw, 18, 4);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, sx - tw / 2 + 5, sy - 15);
+      ctx.restore();
+    }
   }
 
   function drawDraft(draft, px) {
     const pts = cursor ? [...draft.points, cursor] : draft.points;
     if (pts.length) {
       tracePath(pts, draft.kind === 'spikelet' && pts.length > 2);
-      ctx.strokeStyle = draft.kind === 'spikelet' ? css('--accent') : '#ffd23f';
+      ctx.strokeStyle = draft.kind === 'spikelet' ? palette.accent : '#ffd23f';
       ctx.lineWidth = 2 * px;
       ctx.setLineDash([6 * px, 4 * px]);
       ctx.stroke();
       ctx.setLineDash([]);
     }
-    drawHandles(draft.points, css('--accent'), px, 3.5);
+    drawHandles(draft.points, palette.accent, px, 3.5);
   }
 
-  function drawLabels(scene, dpr) {
+  function drawLabels(scene, dpr, hover) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.font = '600 11px system-ui, sans-serif';
     ctx.textBaseline = 'middle';
     const {w, h} = size();
+    const idOnly = view.scale < LABEL_ID_ONLY_SCALE;
+    const items = [];
     for (const s of scene.spikelets) {
       const b = bounds(s.polygon);
       const [sx, sy] = toScreen([(b.x0 + b.x1) / 2, b.y1]);
       if (sx < -40 || sy < -20 || sx > w + 40 || sy > h + 20) continue;
-      const text = scene.labelOf(s);
+      const important = scene.selected.has(s.uid) || s.uid === hover;
+      const text = idOnly && !important ? s.name : scene.labelOf(s);
       const tw = ctx.measureText(text).width + 8;
-      const y = sy + 10;
-      ctx.fillStyle = scene.selected.has(s.uid) ? '#111' : 'rgba(20,20,20,0.72)';
-      ctx.beginPath();
-      ctx.roundRect(sx - tw / 2, y - 8, tw, 16, 4);
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.fillText(text, sx - tw / 2 + 4, y);
+      items.push({s, text, important, rect: {x: sx - tw / 2, y: sy + 2, w: tw, h: 16}});
     }
+    items.sort((a, b) => Number(b.important) - Number(a.important));
+    for (const {s, text, important, rect} of placeLabels(items)) {
+      ctx.fillStyle = important ? '#111' : 'rgba(20,20,20,0.72)';
+      ctx.beginPath();
+      ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 4);
+      ctx.fill();
+      if (important) {
+        ctx.strokeStyle = palette.status[scene.statusOf(s)] ?? '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#fff';
+      ctx.fillText(text, rect.x + 4, rect.y + 8);
+    }
+  }
+
+  // Minimap ---------------------------------------------------------------
+
+  function minimapGeometry(page) {
+    const mw = minimap.clientWidth || minimap.width, mh = minimap.clientHeight || minimap.height;
+    const k = Math.min(mw / page.width, mh / page.height);
+    return {k, ox: (mw - page.width * k) / 2, oy: (mh - page.height * k) / 2, mw, mh};
+  }
+
+  function renderMinimap(scene) {
+    if (!minimap) return;
+    const page = scene.page;
+    minimap.hidden = !page;
+    if (!page) return;
+    const dpr = window.devicePixelRatio || 1;
+    const {k, ox, oy, mw, mh} = minimapGeometry(page);
+    if (minimap.width !== Math.round(mw * dpr)) {
+      minimap.width = Math.round(mw * dpr);
+      minimap.height = Math.round(mh * dpr);
+    }
+    const m = minimap.getContext('2d');
+    m.setTransform(dpr, 0, 0, dpr, 0, 0);
+    m.clearRect(0, 0, mw, mh);
+    if (scene.image && (overview.pageId !== page.id || overview.image !== scene.image)) {
+      overview = {pageId: page.id, image: scene.image, bitmap: null};
+      const off = document.createElement('canvas');
+      off.width = Math.max(1, Math.round(page.width * k * dpr));
+      off.height = Math.max(1, Math.round(page.height * k * dpr));
+      off.getContext('2d').drawImage(scene.image, 0, 0, off.width, off.height);
+      overview.bitmap = off;
+    }
+    if (overview.bitmap && overview.pageId === page.id) m.drawImage(overview.bitmap, ox, oy, page.width * k, page.height * k);
+    else {
+      m.fillStyle = palette.surface;
+      m.fillRect(ox, oy, page.width * k, page.height * k);
+    }
+    for (const s of scene.spikelets) {
+      const b = bounds(s.polygon);
+      m.fillStyle = palette.status[scene.statusOf(s)] ?? '#888';
+      m.globalAlpha = scene.selected.has(s.uid) ? 1 : 0.7;
+      m.fillRect(ox + b.x0 * k, oy + b.y0 * k, Math.max(2, (b.x1 - b.x0) * k), Math.max(2, (b.y1 - b.y0) * k));
+    }
+    m.globalAlpha = 1;
+    const {w, h} = size();
+    const [x0, y0] = toImage(0, 0), [x1, y1] = toImage(w, h);
+    // The overview only helps when part of the page is out of view.
+    minimap.hidden = x0 <= 0 && y0 <= 0 && x1 >= page.width && y1 >= page.height;
+    m.strokeStyle = palette.focus;
+    m.lineWidth = 1.5;
+    m.fillStyle = palette.focus + '22';
+    const rx = ox + Math.max(0, x0) * k, ry = oy + Math.max(0, y0) * k;
+    const rw = (Math.min(page.width, x1) - Math.max(0, x0)) * k, rh = (Math.min(page.height, y1) - Math.max(0, y0)) * k;
+    if (rw > 0 && rh > 0) {
+      m.fillRect(rx, ry, rw, rh);
+      m.strokeRect(rx, ry, rw, rh);
+    }
+  }
+
+  function centerOnMinimap(event) {
+    const page = host.scene().page;
+    if (!page) return;
+    const rect = minimap.getBoundingClientRect();
+    const {k, ox, oy} = minimapGeometry(page);
+    const ix = (event.clientX - rect.left - ox) / k, iy = (event.clientY - rect.top - oy) / k;
+    const {w, h} = size();
+    cancelAnimationFrame(animation);
+    setView(view.scale, w / 2 - ix * view.scale, h / 2 - iy * view.scale);
+  }
+
+  if (minimap) {
+    minimap.addEventListener('pointerdown', event => {
+      minimap.setPointerCapture(event.pointerId);
+      centerOnMinimap(event);
+      const move = e => centerOnMinimap(e);
+      minimap.addEventListener('pointermove', move);
+      minimap.addEventListener('pointerup', () => minimap.removeEventListener('pointermove', move), {once: true});
+    });
+    minimap.addEventListener('wheel', event => {
+      event.preventDefault();
+      const {w, h} = size();
+      zoomAt(Math.exp(-event.deltaY * 0.0015), w / 2, h / 2);
+    }, {passive: false});
   }
 
   // Hit testing -----------------------------------------------------------
@@ -265,17 +435,28 @@ export function createViewer(canvas, host) {
     return null;
   }
 
+  function setHover(uid) {
+    if (uid === hoverUid) return;
+    hoverUid = uid;
+    if (uid) wrap.dataset.hover = '';
+    else delete wrap.dataset.hover;
+    host.onHover?.(uid);
+    requestRender();
+  }
+
   // Pointer handling ------------------------------------------------------
 
   canvas.addEventListener('pointerdown', event => {
     if (!host.scene().page) return;
-    canvas.parentElement.focus({preventScroll: true});
+    cancelAnimationFrame(animation);
+    wrap.focus({preventScroll: true});
     const screen = eventPoint(event);
     const p = toImage(...screen);
     const tool = host.scene().tool;
     canvas.setPointerCapture(event.pointerId);
     if (event.button === 1 || spaceDown) {
-      gesture = {kind: 'pan', origin: screen, view: {...view}, moved: false};
+      gesture = {kind: 'pan', origin: screen, view: {...view}, moved: true};
+      wrap.dataset.panning = '';
       return;
     }
     if (event.button !== 0) return;
@@ -298,7 +479,13 @@ export function createViewer(canvas, host) {
     cursor = toImage(...screen);
     host.onCursor?.(cursor);
     if (!gesture) {
-      if (host.scene().draft || host.scene().ruler?.length === 1) requestRender();
+      const scene = host.scene();
+      if (scene.page && scene.tool === 'select') {
+        setHover(hitSpikelet(cursor)?.uid ?? null);
+        if (hitHandle(cursor)) wrap.dataset.handle = '';
+        else delete wrap.dataset.handle;
+      } else if (hoverUid) setHover(null);
+      if (scene.draft || scene.ruler?.length === 1) requestRender();
       return;
     }
     const moved = distance(screen, gesture.origin) > DRAG_PX;
@@ -307,7 +494,7 @@ export function createViewer(canvas, host) {
       if (gesture.kind === 'vertex') host.beginVertexDrag(gesture.s, gesture.handleKind);
       if (gesture.kind === 'click') {
         gesture.kind = 'pan';
-        canvas.parentElement.dataset.panning = '';
+        wrap.dataset.panning = '';
       }
     }
     if (!gesture.moved) return;
@@ -326,7 +513,7 @@ export function createViewer(canvas, host) {
     if (!gesture) return;
     const g = gesture;
     gesture = null;
-    delete canvas.parentElement.dataset.panning;
+    delete wrap.dataset.panning;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     const tool = host.scene().tool;
     if (g.kind === 'vertex' && g.moved) host.endVertexDrag(g.s, g.handleKind);
@@ -344,7 +531,7 @@ export function createViewer(canvas, host) {
       if (tool === 'select') {
         const s = hitSpikelet(p);
         host.select(s?.uid ?? null, {additive: g.additive || g.kind === 'box'});
-      } else {
+      } else if (insidePage(p)) {
         host.addDraftPoint(clampToPage(p));
       }
     }
@@ -389,11 +576,13 @@ export function createViewer(canvas, host) {
   canvas.addEventListener('pointerleave', () => {
     cursor = null;
     host.onCursor?.(null);
+    setHover(null);
+    delete wrap.dataset.handle;
     requestRender();
   });
 
   window.addEventListener('keydown', event => {
-    if (event.code === 'Space' && !event.repeat && document.activeElement === canvas.parentElement) {
+    if (event.code === 'Space' && !event.repeat && document.activeElement === wrap) {
       spaceDown = true;
       event.preventDefault();
     }
@@ -402,6 +591,12 @@ export function createViewer(canvas, host) {
     if (event.code === 'Space') spaceDown = false;
   });
   new ResizeObserver(requestRender).observe(canvas);
+
+  function insidePage([x, y]) {
+    const page = host.scene().page;
+    const m = DRAFT_MARGIN_PX / view.scale;
+    return x >= -m && y >= -m && x <= page.width + m && y <= page.height + m;
+  }
 
   function clampToPage([x, y]) {
     const page = host.scene().page;
@@ -417,6 +612,7 @@ export function createViewer(canvas, host) {
       zoomAt(factor, w / 2, h / 2);
     },
     resetFit: () => { fitted = null; requestRender(); },
-    get view() { return {...view}; }
+    get view() { return {...view}; },
+    get hoverUid() { return hoverUid; }
   };
 }

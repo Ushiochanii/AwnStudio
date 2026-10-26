@@ -46,7 +46,8 @@ export function createApi({base = '', fetchImpl = (...args) => fetch(...args), p
         if (job.state === 'error' || job.state === 'cancelled') {
           throw new Error(job.error || `job ${job.state}`);
         }
-        if (signal?.aborted && job.state === 'queued') {
+        if (signal?.aborted) {
+          // The service stops a running job at its next progress step.
           await this.cancel(id).catch(() => {});
           throw new Error('cancelled');
         }

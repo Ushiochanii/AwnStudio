@@ -184,3 +184,25 @@ test('a real cached service result parses when available', {skip: !process.env.A
   assert.equal(records.length, data.spikelets.length);
   for (const r of records) for (const k of r.candidates) assert.ok(Math.abs(cal.lengthMm(k.path, c) - k.serviceMm) < 1e-6);
 });
+
+test('length statistics and histogram bins', async () => {
+  const {histogram, niceStep, summarize} = await import('../js/stats.mjs');
+  const s = summarize([4, 1, 3, 2, NaN]);
+  assert.equal(s.n, 4);
+  assert.equal(s.mean, 2.5);
+  assert.equal(s.median, 2.5);
+  assert.ok(Math.abs(s.sd - Math.sqrt(5 / 3)) < 1e-12);
+  assert.deepEqual(summarize([]), {n: 0, mean: null, sd: null, median: null, min: null, max: null});
+  assert.equal(niceStep(60, 12), 5);
+  const bins = histogram([0.5, 12, 59.9, 60], 12);
+  assert.equal(bins[0].x0, 0);
+  assert.equal(bins.reduce((n, b) => n + b.count, 0), 4);
+  assert.ok(bins.at(-1).x1 > 60);
+});
+
+test('labels that would overlap are dropped, earlier ones win', async () => {
+  const {placeLabels} = await import('../js/viewer.mjs');
+  const rect = (x, y) => ({rect: {x, y, w: 40, h: 16}});
+  const kept = placeLabels([rect(0, 0), rect(10, 5), rect(100, 0), rect(0, 40)]);
+  assert.equal(kept.length, 3);
+});
