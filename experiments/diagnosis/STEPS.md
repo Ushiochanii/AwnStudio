@@ -75,3 +75,18 @@ Idea: learn awn vs. clutter colour (CIELAB core / background ring) and cut a clu
 Conclusion: faint real tips and grid lines / tape edges look alike in colour. Overshoot is a
 segmentation problem (the mask itself continues), better addressed in the model, e.g. hard
 negatives for grid lines, page edges and tape edges.
+
+## Step 3: refit the length protocol for the step-1 pipeline (kept)
+
+`SKIP_DATA=1 scripts/develop_cycle.sh`: link models refit on the unchanged train decision data
+(identical coefficients), protocol refit on train pages: a = −0.144, b = 0.9785 (was 0.077 / 0.9772).
+
+## Summary (official ImageJ evaluation, 11 validation pages, 300 targets)
+
+| version | MAE raw | MAE with protocol | MedAE | bias | within 2 mm |
+|---|---|---|---|---|---|
+| baseline 3f7c477 | 1.855 | 1.490 | 0.858 | +0.286 | 83.6% |
+| step 1 shared ridges, old protocol | 1.865 | 1.447 | 0.847 | +0.374 | 83.9% |
+| step 1 + refit protocol (step 3) | 1.865 | **1.411** | 0.745 | +0.203 | 85.2% |
+
+Step 2 (appearance tip trimming) was rejected. Test pages were not used.
