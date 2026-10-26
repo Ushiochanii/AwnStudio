@@ -1,0 +1,51 @@
+{
+  "input": "model",
+  "split": "valid",
+  "pages": 11,
+  "counts": {
+    "OK": 519,
+    "SHORT": 81,
+    "JUMP": 21,
+    "FALSE_LINK": 64,
+    "FALSE_LINK:on_evidence/tip_overshoot": 59,
+    "SHORT:no_evidence": 13,
+    "SHORT:evidence_continues": 68,
+    "paths": 685,
+    "truth_awns": 590,
+    "MISSED": 12,
+    "MISSED:evidence_ge50": 7,
+    "duplicates": 47,
+    "errors": 178,
+    "detached_truth_awns": 4,
+    "FALSE_LINK:on_evidence/mid_path": 4,
+    "FALSE_LINK:empty_space/mid_path": 1
+  },
+  "path_share": {
+    "OK": 0.7576642335766424,
+    "SHORT": 0.11824817518248175,
+    "JUMP": 0.030656934306569343,
+    "FALSE_LINK": 0.09343065693430656
+  },
+  "missed_share_of_truth": 0.020338983050847456,
+  "representative": {
+    "n_truth": 300,
+    "n_measured": 300,
+    "mae_mm": 1.9381085973820036,
+    "median_ae_mm": 1.0966082055192108,
+    "bias_mm": -0.4982393690770665,
+    "within_2mm": 0.7133333333333334
+  },
+  "hardest_pages": [
+    "IMG_9753",
+    "IMG_9710",
+    "IMG_9712",
+    "IMG_9700",
+    "IMG_9711",
+    "IMG_9722",
+    "IMG_9689",
+    "IMG_9795",
+    "IMG_9761",
+    "IMG_9796",
+    "IMG_9688"
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "input": "oracle_broken",
+  "split": "valid",
+  "pages": 11,
+  "counts": {
+    "OK": 500,
+    "SHORT": 138,
+    "JUMP": 14,
+    "FALSE_LINK": 0,
+    "SHORT:no_evidence": 8,
+    "SHORT:evidence_continues": 130,
+    "paths": 652,
+    "truth_awns": 590,
+    "MISSED": 11,
+    "MISSED:evidence_ge50": 11,
+    "duplicates": 62,
+    "errors": 163,
+    "detached_truth_awns": 4
+  },
+  "path_share": {
+    "OK": 0.7668711656441718,
+    "SHORT": 0.2116564417177914,
+    "JUMP": 0.02147239263803681,
+    "FALSE_LINK": 0.0
+  },
+  "missed_share_of_truth": 0.01864406779661017,
+  "representative": {
+    "n_truth": 301,
+    "n_measured": 301,
+    "mae_mm": 1.8654779755788378,
+    "median_ae_mm": 0.9213441281991663,
+    "bias_mm": -1.6449193460379923,
+    "within_2mm": 0.7275747508305648
+  },
+  "hardest_pages": [
+    "IMG_9753",
+    "IMG_9711",
+    "IMG_9712",
+    "IMG_9700",
+    "IMG_9722",
+    "IMG_9761",
+    "IMG_9795",
+    "IMG_9796",
+    "IMG_9689",
+    "IMG_9688",
+    "IMG_9710"
+  ]
+}
