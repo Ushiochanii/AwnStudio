@@ -60,3 +60,18 @@ Train: 55% / 20% / 7% / 10%. JUMPs are almost all onto the sibling awn of the sa
 longest-awn phenotype and was postponed. `overshoot.py` (train): only 71 hops step off the truth
 at the tip, against 429 overshooting paths, so most overshoot is inside the last edge: the model's
 mask itself runs on along a grid line, glare or tape edge. The stitching cannot see this; the image can.
+
+## Step 2: trim tip overshoot by image appearance (rejected)
+
+Idea: learn awn vs. clutter colour (CIELAB core / background ring) and cut a clutter run at the tip.
+
+* Per-point model over all awn / clutter pixels (AUC 0.85), cut where the summed clutter
+  log-odds of the tip suffix beat the overshoot prior: real awns lost ~17 mm
+  (official valid MAE 1.447 -> 17.98). Correlated, weakly informative points add up to false certainty.
+* Tip-region model (real tips vs. overshoot tails, plus colour relative to the awn's own body;
+  `experiments/tiptrim/study.py`): AUC only 0.71 / 0.69; best rule (chosen on train) moves
+  representative MAE 1.607 -> 1.600 (train), 1.753 -> 1.749 (valid). Not worth a pipeline change.
+
+Conclusion: faint real tips and grid lines / tape edges look alike in colour. Overshoot is a
+segmentation problem (the mask itself continues), better addressed in the model, e.g. hard
+negatives for grid lines, page edges and tape edges.
