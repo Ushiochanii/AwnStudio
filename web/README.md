@@ -44,6 +44,7 @@ every awn is traced from root to tip as its length appears.
   the image, or a direct mm/px value (click the scale chip); optionally copy it to
   uncalibrated images of the same pixel size. Measuring an uncalibrated image opens
   calibration first and continues afterwards.
+- **Models**: choose the detection model in the top bar (or Settings), as in the original workbench: YOLO 11N (default), YOLO 11N 960 / 1280, YOLO 11M, RF-DETR, Mask2Former Swin-L, Mask R-CNN, plus custom checkpoints added in Settings. Every detector feeds the same tiling and reconstruction; a detector-specific link model file (`models/link_models.<model id>.json`) is used when present.
 - **Measure** one image or all pending images. While the service works, the live
   detection evidence is drawn as tiles finish, with stage, tile progress, an
   elapsed timer and cancellation. Batches report measured / failed / skipped and can
