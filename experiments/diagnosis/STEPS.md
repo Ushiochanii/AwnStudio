@@ -90,3 +90,26 @@ negatives for grid lines, page edges and tape edges.
 | step 1 + refit protocol (step 3) | 1.865 | **1.411** | 0.745 | +0.203 | 85.2% |
 
 Step 2 (appearance tip trimming) was rejected. Test pages were not used.
+
+## Step 4: awn pairing at crossings (implemented, switched off pending annotation review)
+
+Reported case (IMG_9747, train): two sibling awns cross in an X just above the spikelet; the
+pipeline bounced each awn back to its own side. Cause: the overlap skeletonizes into a tiny ladder
+of 0.4–0.7 mm edges, so the straight path looks like an 80–95° turn locally.
+
+* Contracting sub-diameter junction clusters into one node (`awngraph`, medial-axis criterion)
+  fixes the case but lowers identity keeping against the annotations (oracle train 67% -> 52%). Dropped.
+* Joint re-pairing (`awnstudio/crossings.py`, `pipeline.REPAIR_CROSSINGS`): for two selected awns
+  passing one crossing cluster by different arms, both arm pairings are scored with the fitted
+  junction utility and the tails are exchanged when the other pairing scores higher. It fixes the
+  case (`experiments/crossing/repair_IMG_9747.jpg`), but identity keeping against the annotations
+  drops (oracle train 67% -> 60%), and the official valid MAE is unchanged (1.413 vs 1.411).
+* The annotation itself is wrong at this crossing (`experiments/crossing/zoom_IMG_9747.jpg`): the
+  reviewed polygons bounce back exactly as the old pipeline did, while the image shows a straight
+  X. The polygon labels therefore cannot arbitrate crossing pairings (`pair_data.py`: on train only
+  ~60 labelled two-awn crossing decisions; where truth disagrees with the pipeline, the truth pairing
+  is the less straight one, consistent with bounce-back annotations or kissing awns).
+
+Decision: keep the repair in the code but off by default until a sample of crossing annotations is
+reviewed. Length impact is small either way: these crossings sit near the base, where the lower arms
+are about equally long.
