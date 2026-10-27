@@ -1,7 +1,7 @@
 """Run tiled detection once per page and cache the raw observations.
 
-    PYTHONPATH=src python scripts/run_detection.py --split valid train
-Locked test pages are refused unless --allow-test is given.
+    PYTHONPATH=src python scripts/run_detection.py --split valid train [--detector mask2former-swin-large]
+Observations go to the detector's cache directory (awnstudio.detectors). Locked test pages are refused unless --allow-test is given.
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import cv2
 
 from awnstudio.cache import save_observations
 from awnstudio.detection import OBSERVATION_FLOOR, TiledSegmenter
+from awnstudio.detectors import DETECTORS, detector
 from awnstudio.paths import paths
 from awnstudio.splits import TEST_PAGES, pages
 
@@ -23,15 +24,17 @@ def main():
     parser.add_argument("--pages", nargs="*")
     parser.add_argument("--device", default="0")
     parser.add_argument("--allow-test", action="store_true")
+    parser.add_argument("--detector", choices=sorted(DETECTORS))
     args = parser.parse_args()
 
     todo = list(args.pages or [p for s in args.split for p in pages(s)])
     if not args.allow_test and set(todo) & set(TEST_PAGES):
         raise SystemExit("refusing to touch locked test pages without --allow-test")
 
-    out_dir = paths().runs / "detections"
-    weights_sha = hashlib.sha256(paths().weights.read_bytes()).hexdigest()
-    segmenter = TiledSegmenter(paths().weights, device=args.device)
+    det = detector(args.detector)
+    out_dir = det.detections_dir
+    weights_sha = hashlib.sha256(det.weights.read_bytes()).hexdigest()
+    segmenter = TiledSegmenter(det.weights, device=args.device, adapter=det.adapter)
     for page in todo:
         target = out_dir / f"{page}.json.gz"
         if target.exists():
@@ -46,6 +49,7 @@ def main():
                 "page_id": page,
                 "width": image.shape[1],
                 "height": image.shape[0],
+                "detector": det.id,
                 "weights_sha256": weights_sha,
                 "confidence_floor": OBSERVATION_FLOOR,
             },

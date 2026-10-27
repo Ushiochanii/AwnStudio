@@ -107,16 +107,73 @@ def mask_components(mask: np.ndarray, tile: tuple[int, int, int, int]) -> list[B
     return components
 
 
+class Mask2FormerTiles:
+    """Hugging Face Mask2Former instance segmentation of one tile (masks at tile size).
+
+    Ported from the research project's adapter: no resize, instance post-processing at
+    mask threshold 0.5, label ids 0 = awn and 1 = spikelet.
+    """
+
+    def __init__(self, checkpoint_dir: str | Path, device: str | int = 0):
+        import torch
+        from transformers import AutoImageProcessor, Mask2FormerForUniversalSegmentation
+
+        self.torch = torch
+        self.processor = AutoImageProcessor.from_pretrained(checkpoint_dir, local_files_only=True)
+        self.model = Mask2FormerForUniversalSegmentation.from_pretrained(checkpoint_dir, local_files_only=True)
+        dev = f"cuda:{device}" if str(device).isdigit() else str(device)
+        self.model.to(torch.device(dev)).eval()
+
+    def predict_tile(self, tile_bgr: np.ndarray, confidence: float):
+        h, w = tile_bgr.shape[:2]
+        rgb = cv2.cvtColor(tile_bgr, cv2.COLOR_BGR2RGB)
+        inputs = self.processor(images=rgb, return_tensors="pt", do_resize=False)
+        device = next(self.model.parameters()).device
+        inputs = {k: v.to(device) if hasattr(v, "to") else v for k, v in inputs.items()}
+        with self.torch.no_grad():
+            outputs = self.model(**inputs)
+        post = self.processor.post_process_instance_segmentation(
+            outputs, threshold=confidence, mask_threshold=0.5, target_sizes=[(h, w)], return_binary_maps=True,
+        )[0]
+        segmentation, info = post.get("segmentation"), list(post.get("segments_info", ()))
+        if segmentation is None or not info:
+            return []
+        masks = segmentation.detach().cpu().numpy()
+        if masks.ndim == 2:
+            masks = masks[None]
+        return [(int(i["label_id"]), float(i["score"]), m) for m, i in zip(masks, info)
+                if int(i["label_id"]) in CLASS_NAMES and float(i["score"]) >= confidence]
+
+
 class TiledSegmenter:
-    """Run an Ultralytics segmentation model over a page."""
+    """Run a segmentation model (Ultralytics YOLO or Mask2Former) over a page."""
 
-    def __init__(self, weights: str | Path, device: str | int = 0, imgsz: int = TILE_SIZE):
-        from ultralytics import YOLO
-
+    def __init__(self, weights: str | Path, device: str | int = 0, imgsz: int = TILE_SIZE,
+                 adapter: str = "ultralytics_yolo_seg"):
         self.weights = Path(weights)
-        self.model = YOLO(str(self.weights))
+        self.adapter = adapter
         self.device = device
         self.imgsz = imgsz
+        if adapter == "ultralytics_yolo_seg":
+            from ultralytics import YOLO
+
+            self.model = YOLO(str(self.weights))
+        elif adapter == "mask2former_segmentation":
+            self.model = Mask2FormerTiles(self.weights.parent, device)
+        else:
+            raise ValueError(f"unsupported adapter: {adapter}")
+
+    def _predict_tile(self, tile_bgr: np.ndarray, confidence: float):
+        """[(class id, score, mask)] for one tile; masks at model or tile resolution."""
+        if self.adapter == "mask2former_segmentation":
+            return self.model.predict_tile(tile_bgr, confidence)
+        result = self.model.predict(
+            tile_bgr, imgsz=self.imgsz, conf=confidence, iou=NMS_IOU, device=self.device, verbose=False,
+        )[0]
+        if result.masks is None:
+            return []
+        return list(zip(result.boxes.cls.cpu().numpy().astype(int), result.boxes.conf.cpu().numpy(),
+                        result.masks.data.cpu().numpy()))
 
     def predict_page(
         self,
@@ -130,22 +187,10 @@ class TiledSegmenter:
         observations: list[Observation] = []
         for index, tile in enumerate(tiles):
             x1, y1, x2, y2 = tile
-            result = self.model.predict(
-                image_bgr[y1:y2, x1:x2],
-                imgsz=self.imgsz,
-                conf=confidence,
-                iou=NMS_IOU,
-                device=self.device,
-                verbose=False,
-            )[0]
+            predictions = self._predict_tile(image_bgr[y1:y2, x1:x2], confidence)
             if progress:
                 progress(index + 1, len(tiles))
-            if result.masks is None:
-                continue
-            masks = result.masks.data.cpu().numpy()
-            classes = result.boxes.cls.cpu().numpy().astype(int)
-            scores = result.boxes.conf.cpu().numpy()
-            for prediction, (mask, cls, score) in enumerate(zip(masks, classes, scores)):
+            for prediction, (cls, score, mask) in enumerate(predictions):
                 for component, geometry in enumerate(mask_components(mask, tile)):
                     observations.append(
                         Observation(CLASS_NAMES[int(cls)], float(score), geometry, tile, prediction, component)
