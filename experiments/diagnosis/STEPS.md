@@ -117,6 +117,8 @@ are about equally long.
 Update (owner review of the crossing sheets): many bounce-back annotations at crossings were drawn
 that way for convenience (crossing awns are hard to outline in one go), and the repaired pairings
 looked right for most cases. The crossing repair is therefore switched on by default
-(`pipeline.REPAIR_CROSSINGS = True`); official valid MAE 1.413 (vs 1.411 without, within noise).
+(`pipeline.REPAIR_CROSSINGS = True`). Protocol refit on train (a = −0.134, b = 0.9783): official valid
+MAE **1.414** with protocol (1.869 raw), MedAE 0.760, within 2 mm 85.2% (vs 1.411 / 85.2% without; neutral).
+Annotation at sibling crossings is unreliable, so this was decided on the visual review, not on polygon labels.
 The junction / branch link models were fitted on these annotations and may have learned some
 bounce-backs; a cleaner fit would need the crossing annotations corrected.
