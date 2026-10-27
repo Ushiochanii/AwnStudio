@@ -1,7 +1,8 @@
 """Extract tracing decisions with truth labels from cached pages.
 
-    PYTHONPATH=src python scripts/build_link_dataset.py --split train
-Writes runs/linkdata/<split>.npz-like JSON tables: junction.jsonl, gap.jsonl, root.jsonl.
+    PYTHONPATH=src python scripts/build_link_dataset.py --split train [--detector ID]
+Writes JSON tables junction.jsonl, gap.jsonl, root.jsonl, edge.jsonl into the detector's
+linkdata directory (runs/linkdata/<split> for the default detector).
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from awnstudio.awngraph import build_graph
 from awnstudio.cache import load_observations
 from awnstudio.calibration import calibrate_cached
 from awnstudio.detection import primary
+from awnstudio.detectors import DETECTORS, detector
 from awnstudio.events import gaps, junctions, roots
 from awnstudio.labels import assign_truth, branches, continues, root_correct
 from awnstudio.paths import paths
@@ -22,8 +24,8 @@ from awnstudio.splits import pages
 from awnstudio.truth import truth_instances
 
 
-def page_records(page: str, split: str):
-    obs, meta = load_observations(paths().runs / "detections" / f"{page}.json.gz")
+def page_records(page: str, split: str, detector_id: str | None = None):
+    obs, meta = load_observations(detector(detector_id).detections_dir / f"{page}.json.gz")
     obs = primary(obs)
     cal = calibrate_cached(page)
     sx, sy = cal.mm_per_px
@@ -70,13 +72,14 @@ def page_records(page: str, split: str):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--split", default="train", choices=["train", "valid"])
+    parser.add_argument("--detector", choices=sorted(DETECTORS))
     args = parser.parse_args()
-    out_dir = paths().runs / "linkdata" / args.split
+    out_dir = detector(args.detector).linkdata_dir / args.split
     out_dir.mkdir(parents=True, exist_ok=True)
     handles = {k: open(out_dir / f"{k}.jsonl", "w") for k in ("junction", "gap", "root", "edge")}
     for page in pages(args.split):
         t = time.perf_counter()
-        recs = page_records(page, args.split)
+        recs = page_records(page, args.split, args.detector)
         for k, rows in recs.items():
             for row in rows:
                 handles[k].write(json.dumps(row) + "\n")

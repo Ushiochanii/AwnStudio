@@ -1,21 +1,26 @@
 """Fit the tracing-decision models on training pages; report calibration on validation.
 
-    PYTHONPATH=src python scripts/fit_link_models.py
-Writes models/link_models.json (committed: small, reproducible from this script).
+    PYTHONPATH=src python scripts/fit_link_models.py [--detector ID]
+Writes the detector's link_models.json (models/ for the default detector, models/<id>/
+otherwise; committed: small, reproducible from this script).
 """
 from __future__ import annotations
 
+import argparse
 import json
 
 import numpy as np
 
 from awnstudio.linking import FEATURES, calibration_report, decision_points, fit, fit_choice
-from awnstudio.paths import REPO_ROOT, paths
+from awnstudio.detectors import DETECTORS, detector
+
+
+DET = detector()  # replaced by --detector in main()
 
 
 def load(split, kind):
     source = "junction" if kind == "branch" else kind
-    path = paths().runs / "linkdata" / split / f"{source}.jsonl"
+    path = DET.linkdata_dir / split / f"{source}.jsonl"
     rows = [r for r in map(json.loads, path.read_text().splitlines()) if r["known"]]
     if kind == "branch":  # second awn of the same spikelet leaving the junction
         rows = [{**r, "label": r["branch"]} for r in rows]
@@ -23,6 +28,10 @@ def load(split, kind):
 
 
 def main():
+    global DET
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--detector", choices=sorted(DETECTORS))
+    DET = detector(parser.parse_args().detector)
     models, reports = {}, {}
     for kind in FEATURES:
         train = load("train", kind)
@@ -54,7 +63,7 @@ def main():
         print(f"== choice {split}: points={len(points)} top-1 accuracy={hits / len(points):.3f} nll={ll / len(points):.3f}")
     print("   junction", np.round(choice.junction, 3), "gap", np.round(choice.gap, 3), "stop", np.round(choice.stop, 3))
 
-    out = REPO_ROOT / "models" / "link_models.json"
+    out = DET.link_models_path
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps({"models": models, "choice": choice.to_json(), "reports": reports}, indent=1))
 
