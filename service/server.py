@@ -305,8 +305,7 @@ class Measurer:
     def _run(self, job: Job) -> dict:
         from awnstudio.calibration import Calibration, calibrate_page
         from awnstudio.detection import CLASS_NAMES, PRIMARY_CONFIDENCE, mask_components, tile_windows
-        from awnstudio.linking import load_models
-        from models import files_for, protocol_json
+        from models import models_and_protocol
         from staged import evidence_item, reconstruct_staged
 
         started = time.perf_counter()
@@ -317,7 +316,7 @@ class Measurer:
         if self.model_id != spec.id:
             raise RuntimeError("model changed while loading")
         timings["load"] = time.perf_counter() - t0
-        link_file, protocol_file = files_for(spec.id)
+        link_models, protocol, link_name = models_and_protocol(spec.id)
         image = decode_image(job.image)
         height, width = image.shape[:2]
         if job.periods:
@@ -373,7 +372,7 @@ class Measurer:
 
         page_id = Path(job.name).stem or job.id
         page, stages = reconstruct_staged(page_id, observations, width, height, calibration,
-                                          models=load_models(link_file), on_stage=on_stage)
+                                          models=link_models, on_stage=on_stage)
         stages["timings"] = {**timings, **stages["timings"]}
         result = page.to_json()
         result.update({
@@ -382,8 +381,8 @@ class Measurer:
             "calibration": calibration_json(calibration),
             "model": spec.name,
             "model_id": spec.id,
-            "link_models": link_file.name,
-            "protocol": protocol_json(protocol_file),
+            "link_models": link_name,
+            "protocol": protocol,
             "elapsed_s": time.perf_counter() - started,
             "stages": stages,
         })
@@ -477,10 +476,10 @@ class Samples:
                 calibration = self.calibrate(page)
                 result, stages = reconstruct_staged(page, observations, meta["width"], meta["height"], calibration)
                 data = result.to_json()
-                from models import DEFAULT_MODEL_ID, files_for, protocol_json
+                from models import DEFAULT_MODEL_ID, models_and_protocol
 
                 data.update({"width": meta["width"], "height": meta["height"], "calibration": calibration_json(calibration),
-                             "model_id": DEFAULT_MODEL_ID, "protocol": protocol_json(files_for(DEFAULT_MODEL_ID)[1]),
+                             "model_id": DEFAULT_MODEL_ID, "protocol": models_and_protocol(DEFAULT_MODEL_ID)[1],
                              "stages": stages})
                 self._staged[page] = json.dumps(data).encode("utf-8")
             return self._staged[page]

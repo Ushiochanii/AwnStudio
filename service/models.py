@@ -100,9 +100,18 @@ def builtin_specs(legacy_root: Path) -> list[ModelSpec]:
     ]
 
 
+def _models_dir() -> Path:
+    try:
+        from awnstudio.paths import REPO_ROOT
+    except ImportError:
+        return ROOT / "models"
+    return Path(REPO_ROOT) / "models"
+
+
 def _specific(stem: str, model_id: str | None) -> Path:
-    specific = ROOT / "models" / f"{stem}.{model_id}.json"
-    return specific if model_id and specific.is_file() else ROOT / "models" / f"{stem}.json"
+    folder = _models_dir()
+    specific = folder / f"{stem}.{model_id}.json"
+    return specific if model_id and specific.is_file() else folder / f"{stem}.json"
 
 
 def link_models_for(model_id: str | None) -> Path:
@@ -113,17 +122,24 @@ def protocol_for(model_id: str | None) -> Path:
     return _specific("protocol_pfg", model_id)
 
 
-def files_for(model_id: str | None) -> tuple[Path, Path]:
-    """(link models, length protocol) for a detector, with the default fallback."""
+def models_and_protocol(model_id: str | None):
+    """(link models, protocol dict or None, link-models file name) for a detector.
+
+    Uses `awnstudio.pipeline.models_for` when the pipeline provides it (it owns
+    the fallback rules); otherwise reads the files by the same naming convention.
+    """
     try:
         from awnstudio.pipeline import models_for
     except ImportError:
-        return link_models_for(model_id), protocol_for(model_id)
-    files = models_for(model_id)
-    if isinstance(files, dict):
-        return Path(files["link_models"]), Path(files["protocol"])
-    link, protocol = files
-    return Path(link), Path(protocol)
+        models_for = None
+    if models_for is not None:
+        models, protocol = models_for(model_id)
+        data = None if protocol is None else {**protocol.to_json(), "file": protocol_for(model_id).name}
+        return models, data, link_models_for(model_id).name
+    from awnstudio.linking import load_models
+
+    link = link_models_for(model_id)
+    return load_models(link), protocol_json(protocol_for(model_id)), link.name
 
 
 def protocol_json(path: Path) -> dict | None:

@@ -206,10 +206,10 @@ class RegistryTest(unittest.TestCase):
 
 
 class ProtocolFilesTest(unittest.TestCase):
-    def test_default_protocol_is_read(self):
-        link, protocol = models.files_for("mask2former-swin-large")
-        self.assertTrue(link.name.startswith("link_models"))
-        data = models.protocol_json(protocol)
-        if protocol.exists():
-            self.assertEqual(set(data), {"intercept", "slope", "n", "file"})
+    def test_models_and_protocol_fall_back_to_the_default(self):
+        models_, protocol, link_name = models.models_and_protocol("no-such-detector")
+        self.assertIn("root", models_)
+        self.assertEqual(link_name, "link_models.json")
+        if protocol is not None:
+            self.assertEqual({"intercept", "slope", "n", "file"} <= set(protocol), True)
         self.assertIsNone(models.protocol_json(Path("/nonexistent.json")))
