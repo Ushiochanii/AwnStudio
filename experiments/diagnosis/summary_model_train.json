@@ -1,0 +1,56 @@
+{
+  "input": "model",
+  "split": "train",
+  "pages": 91,
+  "counts": {
+    "OK": 4356,
+    "SHORT": 550,
+    "JUMP": 180,
+    "FALSE_LINK": 500,
+    "FALSE_LINK:on_evidence/tip_overshoot": 422,
+    "SHORT:evidence_continues": 472,
+    "FALSE_LINK:on_evidence/mid_path": 69,
+    "SHORT:no_evidence": 78,
+    "paths": 5586,
+    "truth_awns": 4869,
+    "MISSED": 86,
+    "MISSED:evidence_ge50": 64,
+    "duplicates": 348,
+    "errors": 1316,
+    "detached_truth_awns": 29,
+    "FALSE_LINK:empty_space/tip_overshoot": 7,
+    "FALSE_LINK:empty_space/mid_path": 2
+  },
+  "path_share": {
+    "OK": 0.7798066595059077,
+    "SHORT": 0.09846043680630147,
+    "JUMP": 0.0322234156820623,
+    "FALSE_LINK": 0.08950948800572861
+  },
+  "missed_share_of_truth": 0.017662764428013965,
+  "representative": {
+    "n_truth": 2547,
+    "n_measured": 2544,
+    "mae_mm": 1.915460812471199,
+    "median_ae_mm": 1.065297513058674,
+    "bias_mm": -0.7430889704248825,
+    "within_2mm": 0.7511792452830188
+  },
+  "hardest_pages": [
+    "IMG_9727",
+    "IMG_9702",
+    "IMG_9799",
+    "IMG_9740",
+    "IMG_9763",
+    "IMG_9729",
+    "IMG_9749",
+    "IMG_9732",
+    "IMG_9737",
+    "IMG_9696",
+    "IMG_9703",
+    "IMG_9723",
+    "IMG_9762",
+    "IMG_9780",
+    "IMG_9790"
+  ]
+}

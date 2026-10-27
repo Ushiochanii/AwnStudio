@@ -6,6 +6,7 @@ from functools import lru_cache
 from .assembly import assemble
 from .awngraph import build_graph
 from .calibration import Calibration
+from .crossings import repair as repair_crossings
 from .detection import Observation, primary
 from .linking import load_models
 from .measurement import measure_path_mm, trim_root
@@ -15,6 +16,7 @@ from .spikelets import fuse_spikelets
 from .tracer import Tracer
 
 METHOD = "pfg"
+REPAIR_CROSSINGS = True  # joint re-pairing at crossings (awnstudio.crossings)
 
 
 @lru_cache(maxsize=1)
@@ -36,7 +38,11 @@ def reconstruct_page(
 
     results = [SpikeletResult(s.id, s.geometry, meta={"confidence": s.confidence}) for s in spikelets]
     if mode == "assembly":
-        chosen = [(sel.spikelet, sel.trace, sel.p_root) for sel in assemble(tracer)]
+        selected = assemble(tracer)
+        traces = [sel.trace for sel in selected]
+        if REPAIR_CROSSINGS:
+            traces = repair_crossings(tracer, traces)
+        chosen = [(sel.spikelet, t, sel.p_root) for sel, t in zip(selected, traces)]
     else:  # independent median tracing per root branch
         chosen = [
             (s, tracer.median_trace(tracer.trace_distribution(edge, node)), p_root)
