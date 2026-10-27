@@ -43,7 +43,7 @@ test('detailed CSV keeps the automatic length after an edit', () => {
   const lines = detailedCsv([p, {...page(), id: 'empty', spikelets: []}]).slice(1).split('\r\n');
   assert.equal(lines[0], DETAILED_HEADER.map(h => `"${h}"`).join(','));
   assert.equal(lines.length, 3, 'empty pages are not exported');
-  assert.match(lines[1], /^"IMG_1.JPG","1","10.000","5.000","modified"/);
+  assert.match(lines[1], /^"IMG_1.JPG","1","10.000","5.000","5.000","false","modified"/);
 });
 
 test('CSV names are unique and filesystem-safe', () => {
@@ -179,4 +179,18 @@ test('summary CSV has one row of statistics per measured image', async () => {
   const lines = summaryCsv([page()]).slice(1).split('\r\n');
   assert.equal(lines[0], SUMMARY_HEADER.map(h => `"${h}"`).join(','));
   assert.equal(lines[1], '"IMG_1.JPG","2","1","0","10.000","","10.000","10.000","10.000"');
+});
+
+
+test('the length protocol applies to untouched automatic paths only', async () => {
+  const cal = await import('../js/calibration.mjs');
+  const p = page({run: {method: 'pfg_assembly', protocol: {intercept: 1, slope: 0.5, n: 10}}});
+  const [auto, missing] = p.spikelets;
+  assert.equal(cal.spikeletLength(auto, p), 6);
+  assert.equal(cal.spikeletLength(auto, p, {protocol: false}), 10);
+  assert.equal(cal.spikeletLength(missing, p), null);
+  assert.ok(simpleCsv(p).includes('"1","6.000"'));
+  assert.ok(simpleCsv(p, {protocol: false}).includes('"1","10.000"'));
+  auto.reduced = {line: true};
+  assert.equal(cal.spikeletLength(auto, p), 10, 'an edited path is reported as measured');
 });

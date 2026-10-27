@@ -28,6 +28,7 @@ from awnstudio.awngraph import build_graph
 from awnstudio.calibration import Calibration
 from awnstudio.detection import Observation, primary
 from awnstudio.measurement import measure_path_mm, simplify_path, trim_root
+from awnstudio import pipeline
 from awnstudio.pipeline import METHOD, default_models
 from awnstudio.results import AwnResult, PageResult, SpikeletResult
 from awnstudio.spikelets import fuse_spikelets
@@ -106,13 +107,19 @@ def reconstruct_staged(
 
     started = stage("assemble")
     selections = assemble(tracer)
+    traces = [sel.trace for sel in selections]
+    # Same crossing re-pairing as reconstruct_page, when the pipeline has it.
+    if getattr(pipeline, "REPAIR_CROSSINGS", False):
+        from awnstudio.crossings import repair
+
+        traces = repair(tracer, traces)
     done("assemble", started)
 
     started = stage("measure")
     results = [SpikeletResult(s.id, s.geometry, meta={"confidence": s.confidence}) for s in spikelets]
     growth: dict[str, list[dict]] = {}
-    for sel in selections:
-        s, trace, p_root = sel.spikelet, sel.trace, sel.p_root
+    for sel, trace in zip(selections, traces):
+        s, p_root = sel.spikelet, sel.p_root
         path = trim_root(tracer.trace_path(trace).tolist(), geoms[s])
         results[s].awns.append(AwnResult(
             path_px=[tuple(p) for p in path],
@@ -127,7 +134,7 @@ def reconstruct_staged(
     done("measure", started)
 
     started = stage("alternatives")
-    used_roots = {sel.trace.edges[0] for sel in selections if sel.trace.edges}
+    used_roots = {trace.edges[0] for trace in traces if trace.edges}
     alternatives: dict[str, list[dict]] = {}
     seeds: dict[str, list[dict]] = {}
     for s, branches in tracer.root_branches().items():

@@ -306,7 +306,7 @@ class Measurer:
         from awnstudio.calibration import Calibration, calibrate_page
         from awnstudio.detection import CLASS_NAMES, PRIMARY_CONFIDENCE, mask_components, tile_windows
         from awnstudio.linking import load_models
-        from models import link_models_for
+        from models import files_for, protocol_json
         from staged import evidence_item, reconstruct_staged
 
         started = time.perf_counter()
@@ -317,7 +317,7 @@ class Measurer:
         if self.model_id != spec.id:
             raise RuntimeError("model changed while loading")
         timings["load"] = time.perf_counter() - t0
-        link_file = link_models_for(spec.id)
+        link_file, protocol_file = files_for(spec.id)
         image = decode_image(job.image)
         height, width = image.shape[:2]
         if job.periods:
@@ -383,6 +383,7 @@ class Measurer:
             "model": spec.name,
             "model_id": spec.id,
             "link_models": link_file.name,
+            "protocol": protocol_json(protocol_file),
             "elapsed_s": time.perf_counter() - started,
             "stages": stages,
         })
@@ -476,7 +477,10 @@ class Samples:
                 calibration = self.calibrate(page)
                 result, stages = reconstruct_staged(page, observations, meta["width"], meta["height"], calibration)
                 data = result.to_json()
+                from models import DEFAULT_MODEL_ID, files_for, protocol_json
+
                 data.update({"width": meta["width"], "height": meta["height"], "calibration": calibration_json(calibration),
+                             "model_id": DEFAULT_MODEL_ID, "protocol": protocol_json(files_for(DEFAULT_MODEL_ID)[1]),
                              "stages": stages})
                 self._staged[page] = json.dumps(data).encode("utf-8")
             return self._staged[page]

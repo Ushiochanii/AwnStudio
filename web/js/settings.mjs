@@ -18,6 +18,7 @@ export const DEFAULTS = Object.freeze({
   livePreview: true,
   completionAnimation: true,
   confirmReplace: true,
+  applyProtocol: true,
   // display
   defaultLayer: 'edits',
   defaultMode: 'measure',

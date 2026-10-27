@@ -566,6 +566,20 @@ Object.assign(ja, {
   'timing.load': 'モデル読み込み'
 });
 
+// Length protocol.
+Object.assign(en, {
+  'settings.applyProtocol': 'Apply the length protocol to automatic awns (matches the manual ImageJ convention)',
+  'inspect.protocol': 'Length protocol', 'inspect.reportedLength': 'Reported length (mm)'
+});
+Object.assign(zh, {
+  'settings.applyProtocol': '对自动测得的芒套用长度协议（对齐人工 ImageJ 的量法）',
+  'inspect.protocol': '长度协议', 'inspect.reportedLength': '报告长度 (mm)'
+});
+Object.assign(ja, {
+  'settings.applyProtocol': '自動計測の芒に長さプロトコルを適用する（手動 ImageJ の測り方に合わせる）',
+  'inspect.protocol': '長さプロトコル', 'inspect.reportedLength': '報告する長さ (mm)'
+});
+
 const LOCALES = {en, zh, ja};
 let locale = 'en';
 

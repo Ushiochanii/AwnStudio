@@ -1,6 +1,6 @@
 // CSV and ZIP export. Lengths always come from the page's current calibration.
 
-import {lengthMm} from './calibration.mjs';
+import {applyProtocol, isAutomaticPath, lengthMm, spikeletLength} from './calibration.mjs';
 import {representative} from './result.mjs';
 import {reviewReasons, reviewStatus} from './review.mjs';
 import {summarize} from './stats.mjs';
@@ -19,15 +19,16 @@ const BOM = '﻿';
 const collator = new Intl.Collator(undefined, {numeric: true});
 export const ordered = page => [...page.spikelets].sort((a, b) => collator.compare(a.name, b.name));
 
-export function simpleCsv(page) {
+export function simpleCsv(page, {protocol = true} = {}) {
   const lines = [row(['ID', 'Awn length (mm)'])];
-  for (const s of ordered(page)) lines.push(row([s.name, mm(lengthMm(s.line, page.calibration))]));
+  for (const s of ordered(page)) lines.push(row([s.name, mm(spikeletLength(s, page, {protocol}))]));
   return BOM + lines.join('\r\n');
 }
 
 export const DETAILED_HEADER = [
-  'Image', 'ID', 'Automatic awn length (mm)', 'Final awn length (mm)', 'Review status', 'Review reasons',
-  'Awn score', 'Candidates', 'Modified', 'Confirmed', 'Origin', 'Calibration', 'mm/px x', 'mm/px y', 'Method'
+  'Image', 'ID', 'Automatic awn length (mm)', 'Final awn length (mm)', 'Measured path length (mm)', 'Protocol applied',
+  'Review status', 'Review reasons', 'Awn score', 'Candidates', 'Modified', 'Confirmed', 'Origin', 'Calibration',
+  'mm/px x', 'mm/px y', 'Method', 'Model', 'Protocol intercept', 'Protocol slope'
 ];
 
 export function detailedRows(page, options = {}) {
@@ -39,8 +40,10 @@ export function detailedRows(page, options = {}) {
     return [
       page.name,
       s.name,
-      mm(auto ? lengthMm(auto.path, calibration) : null),
+      mm(auto ? (options.protocol === false ? lengthMm(auto.path, calibration) : applyProtocol(lengthMm(auto.path, calibration), page.run?.protocol)) : null),
+      mm(spikeletLength(s, page, {protocol: options.protocol !== false})),
       mm(lengthMm(s.line, calibration)),
+      options.protocol !== false && page.run?.protocol && isAutomaticPath(s) ? 'true' : 'false',
       reviewStatus(s, context),
       reviewReasons(s, context).join('; '),
       rep?.score == null ? '' : rep.score.toFixed(4),
@@ -51,7 +54,10 @@ export function detailedRows(page, options = {}) {
       calibration?.method ?? '',
       calibration ? calibration.mmPerPx[0].toPrecision(6) : '',
       calibration ? calibration.mmPerPx[1].toPrecision(6) : '',
-      page.run?.method ?? ''
+      page.run?.method ?? '',
+      page.run?.model ?? '',
+      page.run?.protocol ? page.run.protocol.intercept.toPrecision(6) : '',
+      page.run?.protocol ? page.run.protocol.slope.toPrecision(6) : ''
     ];
   });
 }
@@ -147,7 +153,7 @@ export const SUMMARY_HEADER = ['Image', 'Spikelets', 'Measured', 'Confirmed', 'M
 export function summaryCsv(pages, options = {}) {
   const lines = [row(SUMMARY_HEADER)];
   for (const page of exportablePages(pages)) {
-    const stats = summarize(page.spikelets.map(s => lengthMm(s.line, page.calibration)).filter(v => v !== null));
+    const stats = summarize(page.spikelets.map(s => spikeletLength(s, page, {protocol: options.protocol !== false})).filter(v => v !== null));
     const confirmed = page.spikelets.filter(s => reviewStatus(s, {...options, calibration: page.calibration}) === 'confirmed').length;
     lines.push(row([page.name, page.spikelets.length, stats.n, confirmed, mm(stats.mean), mm(stats.sd), mm(stats.median), mm(stats.min), mm(stats.max)]));
   }

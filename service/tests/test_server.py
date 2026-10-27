@@ -203,3 +203,13 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(result.boxes.cls.cpu().numpy().tolist(), [0, 1])
         empty = models.TileModel(type("A", (), {"predict_tile": lambda self, i, confidence: ()})()).predict(None, conf=0.1)[0]
         self.assertIsNone(empty.masks)
+
+
+class ProtocolFilesTest(unittest.TestCase):
+    def test_default_protocol_is_read(self):
+        link, protocol = models.files_for("mask2former-swin-large")
+        self.assertTrue(link.name.startswith("link_models"))
+        data = models.protocol_json(protocol)
+        if protocol.exists():
+            self.assertEqual(set(data), {"intercept", "slope", "n", "file"})
+        self.assertIsNone(models.protocol_json(Path("/nonexistent.json")))

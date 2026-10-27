@@ -66,3 +66,20 @@ export function describe(c) {
   const [sx, sy] = c.mmPerPx;
   return Math.abs(sx - sy) / Math.max(sx, sy) < 1e-4 ? `${sx.toFixed(5)} mm/px` : `${sx.toFixed(5)} × ${sy.toFixed(5)} mm/px`;
 }
+
+// Length protocol (manual = intercept + slope * measured), fitted per detector
+// against the manual ImageJ convention. It describes automatic reconstructions,
+// so it applies only while the measurement path is an untouched automatic
+// candidate; a path the person drew or edited is reported as measured.
+export const isAutomaticPath = s => s.rep !== null && s.rep !== undefined && !s.reduced?.line;
+
+export function applyProtocol(measuredMm, protocol) {
+  if (measuredMm === null || measuredMm === undefined || !protocol) return measuredMm ?? null;
+  return protocol.intercept + protocol.slope * measuredMm;
+}
+
+// The length reported for a spikelet.
+export function spikeletLength(s, page, {protocol = true} = {}) {
+  const measured = lengthMm(s.line, page?.calibration);
+  return protocol && isAutomaticPath(s) ? applyProtocol(measured, page?.run?.protocol) : measured;
+}

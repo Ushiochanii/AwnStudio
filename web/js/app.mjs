@@ -73,7 +73,7 @@ const spikeletByUid = (page, uid) => page?.spikelets.find(s => s.uid === uid) ??
 const primary = () => spikeletByUid(current(), state.primaryUid);
 const reviewOptions = page => ({threshold: state.threshold, calibration: page?.calibration ?? null});
 const statusOf = (s, page = current()) => reviewStatus(s, reviewOptions(page));
-const lengthOf = (s, page = current()) => cal.lengthMm(s.line, page?.calibration);
+const lengthOf = (s, page = current()) => cal.spikeletLength(s, page, {protocol: settings.applyProtocol});
 const fmt = (value, digits = 2) => (value === null || value === undefined || !Number.isFinite(value) ? '—' : value.toFixed(digits));
 const historyOf = page => {
   if (!histories.has(page.id)) histories.set(page.id, createHistory({limit: 70}));
@@ -1746,6 +1746,7 @@ function renderInspect() {
     : stepData.kind === 'hop'
       ? [['inspect.detail.segment', `${fmt(stepData.lengthMm)} mm`], ['inspect.detail.join', stepData.gap ? t('inspect.gapJoin') : t('inspect.junctionJoin')], ['inspect.detail.grown', `${fmt(grownLength(steps, stepIndex))} mm`]]
       : [['inspect.score', fmt(stepData.score, 3)], ['inspect.serviceLength', fmt(stepData.serviceMm, 3)], ['inspect.currentLength', fmt(cal.lengthMm(stepData.path, page.calibration), 3)],
+        ['inspect.reportedLength', fmt(settings.applyProtocol ? cal.applyProtocol(cal.lengthMm(stepData.path, page.calibration), page.run?.protocol) : cal.lengthMm(stepData.path, page.calibration), 3)],
         ['inspect.detail.kind', stepData.alternative ? t('inspect.alternative') : k === s.rep ? t('inspect.representative') : t('inspect.branch')]];
   fillFacts($('#inspect-step-detail'), detail);
   $('#inspect-pool').checked = settings.showPool;
@@ -1774,6 +1775,7 @@ function renderRunInfo(page) {
   fillFacts($('#inspect-run'), [
     ['inspect.method', run.method ?? '—'],
     ['inspect.model', run.model ?? '—'],
+    ['inspect.protocol', run.protocol ? `${run.protocol.intercept.toFixed(3)} + ${run.protocol.slope.toFixed(4)} × L` : '—'],
     ['inspect.elapsed', run.elapsedS ? `${run.elapsedS.toFixed(1)} s` : '—'],
     ['inspect.measuredAt', page.measuredAt ? new Date(page.measuredAt).toLocaleString() : '—'],
     ['inspect.periods', run.periods ? `${run.periods.x.toFixed(2)} × ${run.periods.y.toFixed(2)}` : '—'],
@@ -2170,22 +2172,22 @@ function wire() {
   $('#export-current').onclick = () => {
     const page = current();
     if (!cal.isValid(page.calibration)) return toast(t('export.calibrateCurrent'), 'error');
-    download(csvName(page), simpleCsv(page), 'text/csv;charset=utf-8');
+    download(csvName(page), simpleCsv(page, {protocol: settings.applyProtocol}), 'text/csv;charset=utf-8');
     markExported([page]);
   };
   $('#export-all').onclick = () => {
     const pages = exportablePages(state.pages);
     if (pages.some(p => !cal.isValid(p.calibration))) return toast(t('export.calibrateBatch'), 'error');
     const used = new Set();
-    download('awnstudio-results.zip', new Blob([zip(pages.map(p => ({name: csvName(p, used), content: simpleCsv(p)})))], {type: 'application/zip'}));
+    download('awnstudio-results.zip', new Blob([zip(pages.map(p => ({name: csvName(p, used), content: simpleCsv(p, {protocol: settings.applyProtocol})})))], {type: 'application/zip'}));
     markExported(pages);
   };
   $('#export-detailed').onclick = () => {
-    download('awnstudio-detailed-results.csv', detailedCsv(state.pages, {threshold: state.threshold}), 'text/csv;charset=utf-8');
+    download('awnstudio-detailed-results.csv', detailedCsv(state.pages, {threshold: state.threshold, protocol: settings.applyProtocol}), 'text/csv;charset=utf-8');
     markExported(exportablePages(state.pages));
   };
   $('#export-stats').onclick = () => {
-    download('awnstudio-summary.csv', summaryCsv(state.pages, {threshold: state.threshold}), 'text/csv;charset=utf-8');
+    download('awnstudio-summary.csv', summaryCsv(state.pages, {threshold: state.threshold, protocol: settings.applyProtocol}), 'text/csv;charset=utf-8');
   };
 
   const form = $('#settings-form');

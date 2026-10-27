@@ -88,6 +88,9 @@ export function runInfo(data) {
     pageId: data.page_id ?? null,
     method: data.method ?? null,
     model: data.model ?? null,
+    modelId: data.model_id ?? null,
+    linkModels: data.link_models ?? null,
+    protocol: data.protocol && Number.isFinite(data.protocol.intercept) && Number.isFinite(data.protocol.slope) ? {...data.protocol} : null,
     elapsedS: Number.isFinite(data.elapsed_s) ? data.elapsed_s : null,
     meta: {...(data.meta ?? {})}
   };

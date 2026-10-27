@@ -10,10 +10,11 @@ the reconstruction stay identical whichever detector produced the masks:
   project (`awnphen.modeling.inference.*`, imported read-only from the legacy
   tree), wrapped by `TileModel` below.
 
-The YOLO11N production checkpoint stays the default. The link models of the
-reconstruction were fitted on its detections; `link_models_for` picks a
-detector-specific file when one exists (models/link_models.<model id>.json)
-and otherwise falls back to the default one.
+The YOLO11N production checkpoint stays the default. The link models and the
+length protocol were fitted on its detections; `files_for` picks the
+detector-specific files when they exist (models/link_models.<model id>.json,
+models/protocol_pfg.<model id>.json) and otherwise falls back to the default
+ones. When the pipeline provides `models_for(model_id)` it is used instead.
 """
 from __future__ import annotations
 
@@ -68,6 +69,7 @@ class ModelSpec:
             "available": self.available, "default": self.id == default_id, "custom": self.custom,
             "scale": self.scale, "weights": str(self.weights) if self.custom else None,
             "link_models": link_models_for(self.id).name,
+            "protocol": protocol_for(self.id).name,
         }
 
 
@@ -98,9 +100,39 @@ def builtin_specs(legacy_root: Path) -> list[ModelSpec]:
     ]
 
 
+def _specific(stem: str, model_id: str | None) -> Path:
+    specific = ROOT / "models" / f"{stem}.{model_id}.json"
+    return specific if model_id and specific.is_file() else ROOT / "models" / f"{stem}.json"
+
+
 def link_models_for(model_id: str | None) -> Path:
-    specific = ROOT / "models" / f"link_models.{model_id}.json"
-    return specific if model_id and specific.is_file() else ROOT / "models" / "link_models.json"
+    return _specific("link_models", model_id)
+
+
+def protocol_for(model_id: str | None) -> Path:
+    return _specific("protocol_pfg", model_id)
+
+
+def files_for(model_id: str | None) -> tuple[Path, Path]:
+    """(link models, length protocol) for a detector, with the default fallback."""
+    try:
+        from awnstudio.pipeline import models_for
+    except ImportError:
+        return link_models_for(model_id), protocol_for(model_id)
+    files = models_for(model_id)
+    if isinstance(files, dict):
+        return Path(files["link_models"]), Path(files["protocol"])
+    link, protocol = files
+    return Path(link), Path(protocol)
+
+
+def protocol_json(path: Path) -> dict | None:
+    """The linear method-comparison calibration (manual = a + b * measured)."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        return {"intercept": float(data["intercept"]), "slope": float(data["slope"]), "n": int(data["n"]), "file": Path(path).name}
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
 
 
 # ---------------------------------------------------------------- registry
