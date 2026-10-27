@@ -6,11 +6,14 @@
 Endpoints
     GET    /                         web/ (static)
     GET    /api/health               service and model state
-    GET    /api/models               the detection model(s) this service can run
+    GET    /api/models               detection models (default, active, adapters)
+    POST   /api/models/preload?id=   load a model in the background
+    POST   /api/models               body: {"name", "weights", "adapter"} -> register a custom model
+    DELETE /api/models/<id>          remove a custom model
     POST   /api/calibrate            body: image bytes -> grid calibration
     POST   /api/resolution?force=0   body: image bytes -> resolution assessment
     POST   /api/resize?scale=        body: image bytes -> resampled PNG
-    POST   /api/jobs?name=&x_period_px=&y_period_px=
+    POST   /api/jobs?name=&model=&x_period_px=&y_period_px=
                                      body: image bytes -> {"id"}; one job runs at a time
     GET    /api/jobs/<id>?since=n    state, stage, tiles, detection evidence found since
                                      item n (live preview), and finally the result
@@ -120,6 +123,13 @@ def resample_png(image, scale: float) -> bytes:
     return data.tobytes()
 
 
+def _quiet(fn, *args):
+    try:
+        fn(*args)
+    except Exception:
+        traceback.print_exc()
+
+
 class JobCancelled(Exception):
     pass
 
@@ -130,6 +140,7 @@ class Job:
     name: str
     image: bytes | None
     periods: tuple[float, float] | None
+    model_id: str | None = None
     state: str = "queued"  # queued | running | done | error | cancelled
     # queued | loading | calibrate | detect | fuse | graph | assemble | measure | alternatives
     stage: str = "queued"
@@ -144,7 +155,7 @@ class Job:
     def public(self, since: int = 0) -> dict:
         out = {
             "id": self.id, "name": self.name, "state": self.state, "stage": self.stage, "progress": self.progress,
-            "tiles": {"done": self.tiles[0], "total": self.tiles[1]},
+            "model_id": self.model_id, "tiles": {"done": self.tiles[0], "total": self.tiles[1]},
             "evidence_count": len(self.evidence),
         }
         if self.state == "running" and since < len(self.evidence):
@@ -158,7 +169,7 @@ class Job:
 
 
 class _TileSpy:
-    """Wraps the YOLO model inside TiledSegmenter so each tile's masks can be
+    """Wraps the model inside TiledSegmenter so each tile's masks can be
     previewed as soon as that tile is predicted. Predictions are unchanged."""
 
     def __init__(self, model, on_result):
@@ -174,15 +185,19 @@ class _TileSpy:
 
 
 class Measurer:
-    """Owns the model and runs jobs one at a time on a worker thread."""
+    """Owns the active detection model and runs jobs one at a time on a worker
+    thread. One model is kept in memory; switching releases the previous one."""
 
-    def __init__(self, weights: Path | None, device: str, enabled: bool):
-        self.weights = weights
+    def __init__(self, registry, device: str, enabled: bool, legacy_root: Path | None = None):
+        self.registry = registry
         self.device = device
         self.enabled = enabled
+        self.legacy_root = legacy_root
         self.model_state = "unloaded" if enabled else "disabled"
         self.model_error: str | None = None
         self.segmenter = None
+        self.model_id: str | None = None
+        self.load_lock = threading.Lock()
         self.jobs: dict[str, Job] = {}
         self.order: list[str] = []
         self.queue: queue.Queue[str] = queue.Queue()
@@ -191,10 +206,13 @@ class Measurer:
         threading.Thread(target=self._worker, daemon=True).start()
 
     # -- jobs
-    def submit(self, name: str, image: bytes, periods) -> Job:
+    def submit(self, name: str, image: bytes, periods, model_id: str | None = None) -> Job:
         if not self.enabled:
             raise RuntimeError("the service was started without a model")
-        job = Job(uuid.uuid4().hex[:12], name, image, periods)
+        spec = self.registry.get(model_id)  # KeyError for unknown models
+        if not spec.available:
+            raise ValueError(f"model not available: {spec.name}")
+        job = Job(uuid.uuid4().hex[:12], name, image, periods, spec.id)
         with self.lock:
             self.jobs[job.id] = job
             self.order.append(job.id)
@@ -239,19 +257,46 @@ class Measurer:
                 job.evidence = []
                 self.current = None
 
-    def _load(self):
-        if self.segmenter is not None:
-            return self.segmenter
-        self.model_state = "loading"
-        try:
-            from awnstudio.detection import TiledSegmenter
+    def _release(self):
+        segmenter, self.segmenter, self.model_id = self.segmenter, None, None
+        if segmenter is None:
+            return
+        close = getattr(segmenter.model, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                pass
+        del segmenter
+        import gc
 
-            self.segmenter = TiledSegmenter(self.weights, device=self.device)
-            self.model_state = "ready"
-        except Exception as error:
-            self.model_state, self.model_error = "error", f"{type(error).__name__}: {error}"
-            raise
-        return self.segmenter
+        gc.collect()
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
+
+    def load(self, model_id: str | None = None):
+        """The segmenter of a model, loading it (and releasing another) if needed."""
+        from models import load_segmenter
+
+        spec = self.registry.get(model_id)
+        with self.load_lock:
+            if self.segmenter is not None and self.model_id == spec.id:
+                return spec, self.segmenter
+            self._release()
+            self.model_state, self.model_error = "loading", None
+            try:
+                self.segmenter = load_segmenter(spec, self.device, self.legacy_root)
+                self.model_id = spec.id
+                self.model_state = "ready"
+            except Exception as error:
+                self.model_state, self.model_error = "error", f"{type(error).__name__}: {error}"
+                raise
+            return spec, self.segmenter
 
     def _check(self, job: Job):
         if job.cancel_requested:
@@ -260,12 +305,19 @@ class Measurer:
     def _run(self, job: Job) -> dict:
         from awnstudio.calibration import Calibration, calibrate_page
         from awnstudio.detection import CLASS_NAMES, PRIMARY_CONFIDENCE, mask_components, tile_windows
+        from awnstudio.linking import load_models
+        from models import link_models_for
         from staged import evidence_item, reconstruct_staged
 
         started = time.perf_counter()
         timings = {}
         job.stage = "loading"
-        segmenter = self._load()
+        t0 = time.perf_counter()
+        spec, segmenter = self.load(job.model_id)
+        if self.model_id != spec.id:
+            raise RuntimeError("model changed while loading")
+        timings["load"] = time.perf_counter() - t0
+        link_file = link_models_for(spec.id)
         image = decode_image(job.image)
         height, width = image.shape[:2]
         if job.periods:
@@ -320,14 +372,17 @@ class Measurer:
             job.progress = 0.8 + 0.2 * order.index(name) / len(order)
 
         page_id = Path(job.name).stem or job.id
-        page, stages = reconstruct_staged(page_id, observations, width, height, calibration, on_stage=on_stage)
+        page, stages = reconstruct_staged(page_id, observations, width, height, calibration,
+                                          models=load_models(link_file), on_stage=on_stage)
         stages["timings"] = {**timings, **stages["timings"]}
         result = page.to_json()
         result.update({
             "width": width,
             "height": height,
             "calibration": calibration_json(calibration),
-            "model": self.weights.name if self.weights else None,
+            "model": spec.name,
+            "model_id": spec.id,
+            "link_models": link_file.name,
             "elapsed_s": time.perf_counter() - started,
             "stages": stages,
         })
@@ -335,28 +390,29 @@ class Measurer:
 
     def health(self) -> dict:
         busy = self.current is not None or not self.queue.empty()
+        spec = None
+        if self.enabled and self.model_id:
+            try:
+                spec = self.registry.get(self.model_id)
+            except KeyError:
+                spec = None
         return {
             "ok": True,
             "busy": busy,
             "model": {
                 "state": self.model_state,
                 "error": self.model_error,
-                "weights": str(self.weights) if self.weights else None,
+                "id": self.model_id,
+                "name": spec.name if spec else None,
+                "weights": str(spec.weights) if spec else None,
                 "device": self.device,
             },
         }
 
     def models(self) -> dict:
-        if not self.weights:
-            return {"default": None, "models": []}
-        model = {
-            "id": self.weights.parent.parent.name or self.weights.stem,
-            "name": self.weights.parent.parent.name or self.weights.name,
-            "weights": str(self.weights),
-            "available": self.enabled and self.weights.exists(),
-            "device": "cpu" if self.device == "cpu" else "gpu",
-        }
-        return {"default": model["id"], "models": [model]}
+        if not self.enabled:
+            return {"default": None, "active": None, "models": [], "adapters": []}
+        return {**self.registry.catalog(), "active": self.model_id, "device": "cpu" if self.device == "cpu" else "gpu"}
 
 
 @dataclass(frozen=True)
@@ -535,8 +591,24 @@ def make_handler(measurer: Measurer, samples: Samples):
                         periods = (float(query["x_period_px"]), float(query["y_period_px"]))
                         if not all(p > 0 for p in periods):
                             raise ValueError("periods must be positive")
-                    job = measurer.submit(query.get("name", "page"), self._body(), periods)
+                    try:
+                        job = measurer.submit(query.get("name", "page"), self._body(), periods, query.get("model") or None)
+                    except KeyError as error:
+                        raise ValueError(str(error).strip("'")) from None
                     return self._json({"id": job.id}, 202)
+                if url.path == "/api/models/preload":
+                    if not measurer.enabled:
+                        raise RuntimeError("the service was started without a model")
+                    spec = measurer.registry.get(query.get("id") or None)
+                    if not spec.available:
+                        raise ValueError(f"model not available: {spec.name}")
+                    threading.Thread(target=lambda: _quiet(measurer.load, spec.id), daemon=True).start()
+                    return self._json({"id": spec.id, "state": "loading"}, 202)
+                if url.path == "/api/models":
+                    payload = json.loads(self._body() or b"{}")
+                    spec = measurer.registry.register(str(payload.get("name", "")), str(payload.get("weights", "")),
+                                                      str(payload.get("adapter", "ultralytics_yolo_seg")))
+                    return self._json({"model": spec.public(measurer.registry.default_id)}, 201)
             except RuntimeError as error:
                 return self._error(503, str(error))
             except ValueError as error:
@@ -550,6 +622,10 @@ def make_handler(measurer: Measurer, samples: Samples):
             parts = [p for p in urlparse(self.path).path.split("/") if p]
             if len(parts) == 3 and parts[:2] == ["api", "jobs"]:
                 return self._json({"cancelled": measurer.cancel(parts[2])})
+            if len(parts) == 3 and parts[:2] == ["api", "models"]:
+                if parts[2] == measurer.model_id and measurer.current:
+                    return self._error(409, "the model is in use")
+                return self._json({"removed": measurer.registry.remove(parts[2])})
             self._error(404, "not found")
 
         def _static(self, path: str):
@@ -577,12 +653,14 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     weights, results_dir, image_of, detections_dir, calibrate = args.weights, None, lambda page: None, None, None
+    legacy_root = None
     try:
         from awnstudio.calibration import calibrate_cached
         from awnstudio.paths import paths
 
         p = paths()
         weights = weights or p.weights
+        legacy_root = p.legacy_root if p.legacy_root.is_dir() else None
         results_dir = p.runs / "results" / "pfg"
         detections_dir = p.runs / "detections"
         image_of = p.page_image
@@ -590,10 +668,13 @@ def main(argv=None):
     except Exception as error:
         print(f"paths.yaml unavailable ({error}); samples disabled", file=sys.stderr)
 
-    enabled = not args.no_model and weights is not None
-    measurer = Measurer(weights, args.device, enabled)
+    from models import Registry
+
+    registry = Registry(legacy_root, args.weights or weights)
+    enabled = not args.no_model and registry.default_id is not None
+    measurer = Measurer(registry, args.device, enabled, legacy_root)
     if enabled and args.preload:
-        measurer._load()
+        measurer.load()
     samples = Samples(results_dir, image_of, detections_dir, calibrate)
     server = ThreadingHTTPServer((args.host, args.port), make_handler(measurer, samples))
     print(f"AwnStudio on http://{args.host}:{args.port}/  (model: {measurer.model_state})", flush=True)

@@ -32,9 +32,12 @@ export function createApi({base = '', fetchImpl = (...args) => fetch(...args), p
     calibrate: blob => request('/api/calibrate', {method: 'POST', ...image(blob)}),
     resolution: (blob, {force = false} = {}) => request('/api/resolution', {method: 'POST', ...image(blob), query: {force: force ? 1 : 0}}),
     resize: async (blob, scale) => (await send('/api/resize', {method: 'POST', ...image(blob), query: {scale}})).blob(),
-    submit: (blob, {name, periods} = {}) => request('/api/jobs', {
+    preload: id => request('/api/models/preload', {method: 'POST', query: {id}}),
+    registerModel: model => request('/api/models', {method: 'POST', body: JSON.stringify(model), type: 'application/json'}),
+    removeModel: id => request(`/api/models/${encodeURIComponent(id)}`, {method: 'DELETE'}),
+    submit: (blob, {name, periods, model} = {}) => request('/api/jobs', {
       method: 'POST', ...image(blob),
-      query: {name, x_period_px: periods?.x_period_px, y_period_px: periods?.y_period_px}
+      query: {name, model: model || null, x_period_px: periods?.x_period_px, y_period_px: periods?.y_period_px}
     }),
     job: (id, since = 0) => request(`/api/jobs/${encodeURIComponent(id)}`, {query: since ? {since} : null}),
     cancel: id => request(`/api/jobs/${encodeURIComponent(id)}`, {method: 'DELETE'}),
@@ -45,8 +48,8 @@ export function createApi({base = '', fetchImpl = (...args) => fetch(...args), p
     // Submit and follow one job to completion. `onProgress(job)` sees every
     // poll; `onEvidence(items)` receives the detection evidence found since
     // the previous poll (live preview).
-    async measure(blob, {name, periods, onProgress, onEvidence, signal} = {}) {
-      const {id} = await this.submit(blob, {name, periods});
+    async measure(blob, {name, periods, model, onProgress, onEvidence, signal} = {}) {
+      const {id} = await this.submit(blob, {name, periods, model});
       let since = 0;
       for (;;) {
         const job = await this.job(id, since);

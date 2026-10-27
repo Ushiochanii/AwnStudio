@@ -367,6 +367,20 @@
           <label class="check"><input type="checkbox" name="openCalibrationAfterImport"> <span data-i18n="settings.openCalibration"></span></label>
         </section>
         <section data-panel="inference" hidden>
+          <label class="field"><span data-i18n="settings.defaultModel"></span><select name="modelId" id="setting-model"></select></label>
+          <div class="model-manager">
+            <h3 data-i18n="settings.customModels">Custom models</h3>
+            <div class="custom-models" id="custom-models"></div>
+            <div class="row">
+              <input id="custom-model-name" data-i18n-placeholder="settings.modelName">
+              <select id="custom-model-adapter"></select>
+            </div>
+            <div class="row">
+              <input id="custom-model-path" class="grow" data-i18n-placeholder="settings.modelPath">
+              <button type="button" class="small" id="custom-model-add" data-i18n="settings.addModel">Add model</button>
+            </div>
+            <p class="small muted" id="custom-model-message"></p>
+          </div>
           <label class="check"><input type="checkbox" name="measureAfterImport"> <span data-i18n="settings.measureAfterImport"></span></label>
           <label class="check"><input type="checkbox" name="runAfterCalibration"> <span data-i18n="settings.runAfterCalibration"></span></label>
           <label class="check"><input type="checkbox" name="continueBatchAfterError"> <span data-i18n="settings.continueBatch"></span></label>

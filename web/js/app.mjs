@@ -52,6 +52,8 @@ const state = {
   checkedPages: new Set(),
   service: {state: 'unknown', info: null},
   models: [],
+  modelDefault: null,
+  modelAdapters: [],
   measuring: false,
   batch: null, // {total, done, failed, skipped, stop, started, current}
   calContinuation: null, // 'run' when calibration was opened to start a measurement
@@ -806,11 +808,7 @@ async function checkService() {
       info,
       state: model === 'disabled' ? 'edit-only' : model === 'error' ? 'error' : info.busy ? 'busy' : model === 'ready' ? 'ready' : model === 'loading' ? 'loading' : 'idle'
     };
-    if (!state.models.length) {
-      const catalog = await api().models().catch(() => ({models: []}));
-      state.models = catalog.models ?? [];
-      renderModels();
-    }
+    if (!state.models.length) await refreshModels();
   } catch {
     state.service = {state: 'offline', info: null};
   }
@@ -819,15 +817,121 @@ async function checkService() {
   renderBatch();
 }
 
+// ---------------------------------------------------------------- models
+
+async function refreshModels() {
+  const catalog = await api().models().catch(() => ({models: []}));
+  state.models = catalog.models ?? [];
+  state.modelDefault = catalog.default ?? null;
+  state.modelAdapters = catalog.adapters ?? [];
+  renderModels();
+}
+
+// The model measurements run with: the chosen one while it is available,
+// otherwise the service default (the production YOLO checkpoint).
+function selectedModelId() {
+  const chosen = state.models.find(m => m.id === settings.modelId && m.available);
+  return chosen?.id ?? state.modelDefault ?? null;
+}
+
+const modelName = id => state.models.find(m => m.id === id)?.name ?? id ?? '';
+
+function fillModelSelect(select, {withDefault = false} = {}) {
+  const options = state.models.map(m => {
+    const option = new Option(m.name + (m.default && !/default/i.test(m.name) ? ` (${t('model.default')})` : ''), m.id);
+    option.disabled = !m.available;
+    option.title = m.description || '';
+    return option;
+  });
+  if (withDefault) options.unshift(new Option(t('model.serviceDefault'), ''));
+  if (!options.length) options.push(new Option(t('model.none'), ''));
+  select.replaceChildren(...options);
+}
+
 function renderModels() {
   const select = $('#model-select');
-  const models = state.models.length ? state.models : [{id: '', name: t('model.none'), available: false}];
-  select.replaceChildren(...models.map(m => {
-    const option = new Option(m.name, m.id);
-    option.disabled = !m.available;
-    return option;
+  fillModelSelect(select);
+  select.value = selectedModelId() ?? '';
+  select.disabled = !state.models.some(m => m.available) || state.measuring || Boolean(state.batch);
+  select.title = state.models.find(m => m.id === select.value)?.description ?? '';
+  const setting = $('#setting-model');
+  fillModelSelect(setting, {withDefault: true});
+  setting.value = state.models.some(m => m.id === settings.modelId) ? settings.modelId : '';
+  renderCustomModels();
+}
+
+function renderCustomModels() {
+  const adapter = $('#custom-model-adapter');
+  if (adapter.options.length !== state.modelAdapters?.length) {
+    adapter.replaceChildren(...(state.modelAdapters ?? []).map(a => new Option(a.name, a.id)));
+  }
+  const custom = state.models.filter(m => m.custom);
+  const list = $('#custom-models');
+  if (!custom.length) {
+    list.replaceChildren(Object.assign(document.createElement('span'), {className: 'small muted', textContent: t('settings.noCustomModels')}));
+    return;
+  }
+  list.replaceChildren(...custom.map(m => {
+    const row = document.createElement('div');
+    row.className = 'custom-model';
+    const text = document.createElement('span');
+    text.append(Object.assign(document.createElement('strong'), {textContent: m.name}),
+      Object.assign(document.createElement('small'), {textContent: m.weights ?? m.adapter, title: m.weights ?? ''}));
+    const remove = Object.assign(document.createElement('button'), {type: 'button', className: 'small ghost danger', textContent: t('settings.removeModel')});
+    remove.disabled = state.measuring;
+    remove.onclick = async () => {
+      try {
+        await api().removeModel(m.id);
+        if (settings.modelId === m.id) {
+          settings.modelId = '';
+          persistSettings();
+        }
+        await refreshModels();
+        $('#custom-model-message').textContent = t('settings.modelRemoved');
+      } catch (error) {
+        $('#custom-model-message').textContent = error.message;
+      }
+    };
+    row.append(text, remove);
+    return row;
   }));
-  select.disabled = state.models.length < 2;
+}
+
+async function chooseModel(id) {
+  settings.modelId = id === state.modelDefault ? '' : id;
+  persistSettings();
+  renderModels();
+  const model = selectedModelId();
+  if (!model || !serviceUsable(false)) return;
+  setModelStatus(t('model.preparing', {model: modelName(model)}));
+  try {
+    await api().preload(model);
+  } catch (error) {
+    setModelStatus(t('model.preloadFailed', {model: modelName(model), message: error.message}), true);
+  }
+}
+
+async function addCustomModel() {
+  const name = $('#custom-model-name').value.trim();
+  const weights = $('#custom-model-path').value.trim();
+  const message = $('#custom-model-message');
+  if (!name || !weights) {
+    message.textContent = t('settings.modelRequired');
+    return;
+  }
+  const button = $('#custom-model-add');
+  button.disabled = true;
+  message.textContent = t('settings.addingModel');
+  try {
+    const {model} = await api().registerModel({name, weights, adapter: $('#custom-model-adapter').value});
+    await refreshModels();
+    $('#custom-model-name').value = $('#custom-model-path').value = '';
+    message.textContent = model.available ? t('settings.modelAdded') : t('settings.modelAddedUnavailable');
+  } catch (error) {
+    message.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function renderService() {
@@ -913,6 +1017,7 @@ async function measure(page, {askReplace = true, prefix = ''} = {}) {
     const job = await api().measure(page.blob, {
       name: page.name,
       periods: cal.servicePeriods(page.calibration),
+      model: selectedModelId(),
       signal: controller.signal,
       onEvidence(items) {
         if (state.live?.pageId === page.id) state.live.evidence.push(...items);
@@ -1252,6 +1357,7 @@ async function loadSample(id, button) {
 // ---------------------------------------------------------------- rendering
 
 function renderAll() {
+  renderModels();
   renderImageList();
   renderStage();
   renderPanels();
@@ -1840,6 +1946,14 @@ function wire() {
   };
   $('#samples-open').onclick = $('#empty-sample').onclick = openSamples;
   $('#service-retry').onclick = () => { state.models = []; checkService(); };
+  $('#model-select').onchange = e => chooseModel(e.target.value);
+  $('#custom-model-add').onclick = addCustomModel;
+  $('#custom-model-path').onkeydown = e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCustomModel();
+    }
+  };
   $('#help-open').onclick = openHelp;
   $('#job-cancel').onclick = () => {
     current()?.job?.controller?.abort();
@@ -2094,6 +2208,7 @@ function wire() {
     if (el.name === 'language') applyLanguage();
     if (el.name === 'theme') applyTheme();
     if (el.name === 'serviceBase') { state.models = []; checkService(); }
+    if (el.name === 'modelId') chooseModel(el.value || state.modelDefault);
     renderAll();
   };
   $('#clear-workspace').onclick = async () => {

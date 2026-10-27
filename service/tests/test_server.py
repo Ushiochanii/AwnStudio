@@ -15,6 +15,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import models  # noqa: E402
 import server  # noqa: E402
 
 
@@ -31,7 +32,7 @@ class ServiceTest(unittest.TestCase):
         (root / "results" / "summary.json").write_text("{}")
         samples = server.Samples(root / "results", lambda page: root / "images" / f"{page}.JPG")
         samples._locked = lambda: {"IMG_0002"}
-        cls.measurer = server.Measurer(None, "cpu", enabled=False)
+        cls.measurer = server.Measurer(models.Registry(None), "cpu", enabled=False)
         cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.make_handler(cls.measurer, samples))
         cls.base = f"http://127.0.0.1:{cls.httpd.server_address[1]}"
         threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
@@ -132,3 +133,73 @@ class ResolutionTest(unittest.TestCase):
         self.assertEqual(image.shape[:2], (150, 200))
         with self.assertRaises(ValueError):
             server.resample_png(self.grid(59.0, 40, 30), 100)
+
+
+class RegistryTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.custom = self.root / "custom.json"
+        self._custom_path = models.CUSTOM_MODELS_PATH
+        models.CUSTOM_MODELS_PATH = self.custom
+        artifacts = self.root / "artifacts" / "models"
+        yolo = artifacts / "controlled_v2_targeted_robust_stage1_640_b20/weights/best.pt"
+        yolo.parent.mkdir(parents=True)
+        yolo.write_bytes(b"x")
+        m2f = artifacts / "reviewer_mask2former_swin_large_formal_20260929/best"
+        m2f.mkdir(parents=True)
+        (m2f / "model.safetensors").write_bytes(b"x")
+
+    def tearDown(self):
+        models.CUSTOM_MODELS_PATH = self._custom_path
+        self.tmp.cleanup()
+
+    def test_catalog_keeps_yolo_as_default(self):
+        registry = models.Registry(self.root)
+        catalog = registry.catalog()
+        self.assertEqual(catalog["default"], models.DEFAULT_MODEL_ID)
+        by_id = {m["id"]: m for m in catalog["models"]}
+        self.assertEqual(len(by_id), 7)
+        self.assertTrue(by_id[models.DEFAULT_MODEL_ID]["available"])
+        self.assertTrue(by_id[models.DEFAULT_MODEL_ID]["default"])
+        # Mask2Former also needs its Hugging Face config files.
+        self.assertFalse(by_id["mask2former-swin-large"]["available"])
+        folder = self.root / "artifacts/models/reviewer_mask2former_swin_large_formal_20260929/best"
+        (folder / "config.json").write_text("{}")
+        (folder / "preprocessor_config.json").write_text("{}")
+        self.assertTrue(registry.get("mask2former-swin-large").available)
+        self.assertEqual(registry.get(None).id, models.DEFAULT_MODEL_ID)
+        with self.assertRaises(KeyError):
+            registry.get("nope")
+
+    def test_custom_models_register_and_remove(self):
+        registry = models.Registry(self.root)
+        weights = self.root / "mine.pt"
+        weights.write_bytes(b"x")
+        spec = registry.register("Mine", str(weights), "ultralytics_yolo_seg")
+        self.assertTrue(spec.custom)
+        self.assertTrue(registry.get(spec.id).available)
+        with self.assertRaises(ValueError):
+            registry.register("Bad", str(weights), "unknown")
+        self.assertTrue(registry.remove(spec.id))
+        self.assertFalse(registry.remove(spec.id))
+
+    def test_link_models_fall_back_to_the_default_file(self):
+        self.assertEqual(models.link_models_for("mask2former-swin-large").name, "link_models.json")
+
+    def test_tile_model_presents_adapter_predictions_as_ultralytics_results(self):
+        import numpy as np
+
+        class Prediction:
+            def __init__(self, cls, conf):
+                self.class_id, self.confidence, self.mask = cls, conf, np.ones((4, 5), np.uint8)
+
+        class Adapter:
+            def predict_tile(self, image, confidence):
+                return (Prediction(0, 0.9), Prediction(1, 0.4))
+
+        result = models.TileModel(Adapter()).predict(np.zeros((4, 5, 3), np.uint8), conf=0.05, imgsz=640)[0]
+        self.assertEqual(result.masks.data.cpu().numpy().shape, (2, 4, 5))
+        self.assertEqual(result.boxes.cls.cpu().numpy().tolist(), [0, 1])
+        empty = models.TileModel(type("A", (), {"predict_tile": lambda self, i, confidence: ()})()).predict(None, conf=0.1)[0]
+        self.assertIsNone(empty.masks)

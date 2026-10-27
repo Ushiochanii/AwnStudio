@@ -534,6 +534,38 @@ Object.assign(ja, {
   'key.box': '頂点を範囲選択', 'key.layers': '証拠 / 成長 / 候補 / 編集', 'key.original': '元画像を表示'
 });
 
+// Model switching.
+Object.assign(en, {
+  'model.default': 'default', 'model.serviceDefault': 'Service default (YOLO 11N)', 'model.preparing': 'Preparing {model}…',
+  'model.preloadFailed': '{model} could not be loaded: {message}',
+  'settings.defaultModel': 'Detection model', 'settings.customModels': 'Custom models', 'settings.modelName': 'Name',
+  'settings.modelPath': 'Path to the weights (Windows or WSL path)', 'settings.addModel': 'Add model',
+  'settings.noCustomModels': 'No custom models yet.', 'settings.removeModel': 'Remove', 'settings.modelRemoved': 'Model removed.',
+  'settings.modelRequired': 'A name and a weights path are required.', 'settings.addingModel': 'Adding the model…',
+  'settings.modelAdded': 'Model added.', 'settings.modelAddedUnavailable': 'Model added, but its weights or runtime are not available.',
+  'timing.load': 'Model load'
+});
+Object.assign(zh, {
+  'model.default': '默认', 'model.serviceDefault': '服务默认（YOLO 11N）', 'model.preparing': '正在准备 {model}…',
+  'model.preloadFailed': '{model} 加载失败：{message}',
+  'settings.defaultModel': '检测模型', 'settings.customModels': '自定义模型', 'settings.modelName': '名称',
+  'settings.modelPath': '权重路径（Windows 或 WSL 路径）', 'settings.addModel': '添加模型',
+  'settings.noCustomModels': '还没有自定义模型。', 'settings.removeModel': '移除', 'settings.modelRemoved': '已移除模型。',
+  'settings.modelRequired': '需要填写名称和权重路径。', 'settings.addingModel': '正在添加模型…',
+  'settings.modelAdded': '已添加模型。', 'settings.modelAddedUnavailable': '已添加模型，但权重或运行环境不可用。',
+  'timing.load': '模型加载'
+});
+Object.assign(ja, {
+  'model.default': '既定', 'model.serviceDefault': 'サービス既定（YOLO 11N）', 'model.preparing': '{model} を準備中…',
+  'model.preloadFailed': '{model} を読み込めませんでした：{message}',
+  'settings.defaultModel': '検出モデル', 'settings.customModels': 'カスタムモデル', 'settings.modelName': '名前',
+  'settings.modelPath': '重みのパス（Windows または WSL のパス）', 'settings.addModel': 'モデルを追加',
+  'settings.noCustomModels': 'カスタムモデルはまだありません。', 'settings.removeModel': '削除', 'settings.modelRemoved': 'モデルを削除しました。',
+  'settings.modelRequired': '名前と重みのパスが必要です。', 'settings.addingModel': 'モデルを追加中…',
+  'settings.modelAdded': 'モデルを追加しました。', 'settings.modelAddedUnavailable': 'モデルを追加しましたが、重みまたは実行環境が利用できません。',
+  'timing.load': 'モデル読み込み'
+});
+
 const LOCALES = {en, zh, ja};
 let locale = 'en';
 

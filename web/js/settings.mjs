@@ -11,6 +11,7 @@ export const DEFAULTS = Object.freeze({
   autoCalibrate: true,
   openCalibrationAfterImport: false,
   // measurement
+  modelId: '', // '' = the service default (YOLO 11N)
   measureAfterImport: false,
   runAfterCalibration: false,
   continueBatchAfterError: true,
