@@ -16,7 +16,7 @@ from .spikelets import fuse_spikelets
 from .tracer import Tracer
 
 METHOD = "pfg"
-REPAIR_CROSSINGS = False  # joint re-pairing at crossings (awnstudio.crossings); off until annotations at crossings are reviewed
+REPAIR_CROSSINGS = True  # joint re-pairing at crossings (awnstudio.crossings)
 
 
 @lru_cache(maxsize=1)

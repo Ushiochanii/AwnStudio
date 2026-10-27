@@ -113,3 +113,10 @@ of 0.4–0.7 mm edges, so the straight path looks like an 80–95° turn locally
 Decision: keep the repair in the code but off by default until a sample of crossing annotations is
 reviewed. Length impact is small either way: these crossings sit near the base, where the lower arms
 are about equally long.
+
+Update (owner review of the crossing sheets): many bounce-back annotations at crossings were drawn
+that way for convenience (crossing awns are hard to outline in one go), and the repaired pairings
+looked right for most cases. The crossing repair is therefore switched on by default
+(`pipeline.REPAIR_CROSSINGS = True`); official valid MAE 1.413 (vs 1.411 without, within noise).
+The junction / branch link models were fitted on these annotations and may have learned some
+bounce-backs; a cleaner fit would need the crossing annotations corrected.
