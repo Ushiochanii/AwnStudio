@@ -34,3 +34,7 @@ Refitting for a detector (train pages only; WSL, `PYTHONPATH=src`):
 python scripts/run_detection.py --split train valid --detector mask2former-swin-large
 DETECTOR=mask2former-swin-large bash scripts/develop_cycle.sh
 ```
+
+Official validation result (11 pages, 300 ImageJ targets, protocol applied, each detector with its
+own fitted files): YOLO `controlled-v2-stage1` MAE 1.414 mm, median 0.760 mm, within 2 mm 85.2%;
+Mask2Former `mask2former-swin-large` MAE 2.027 mm, median 1.065 mm, within 2 mm 77.6%.
